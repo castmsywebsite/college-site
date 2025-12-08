@@ -6,7 +6,8 @@ import { v4 as uuidv4 } from "uuid";
 
 export const GET: APIRoute = async () => {
   try {
-    const marks = await db()
+    //FIXED: db.select instead of db().select
+    const marks = await db
       .select()
       .from(internalMarksTable)
       .orderBy(desc(internalMarksTable.date));
@@ -14,9 +15,7 @@ export const GET: APIRoute = async () => {
   } catch (error) {
     return new Response(
       JSON.stringify({ message: "Error fetching internal marks" }),
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 };
@@ -36,9 +35,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (!title || !level || !program || !batch || !semester || !dateStr) {
       return new Response(
         JSON.stringify({ message: "Missing required fields" }),
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -51,7 +48,8 @@ export const POST: APIRoute = async ({ request }) => {
 
     const id = uuidv4();
 
-    await db()
+    //FIXED: db.insert instead of db().insert
+    await db
       .insert(internalMarksTable)
       .values({
         id,
@@ -67,17 +65,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     return new Response(
       JSON.stringify({ message: "Internal marks created", id }),
-      {
-        status: 201,
-      }
+      { status: 201 }
     );
   } catch (error) {
     console.error("Error creating internal marks:", error);
     return new Response(
       JSON.stringify({ message: "Error creating internal marks" }),
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 };

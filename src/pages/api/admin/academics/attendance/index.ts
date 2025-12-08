@@ -6,7 +6,8 @@ import { v4 as uuidv4 } from "uuid";
 
 export const GET: APIRoute = async () => {
   try {
-    const attendance = await db()
+    //FIXED: db.select instead of db().select
+    const attendance = await db
       .select()
       .from(attendanceTable)
       .orderBy(desc(attendanceTable.date));
@@ -14,9 +15,7 @@ export const GET: APIRoute = async () => {
   } catch (error) {
     return new Response(
       JSON.stringify({ message: "Error fetching attendance" }),
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 };
@@ -36,9 +35,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (!title || !level || !program || !batch || !semester || !dateStr) {
       return new Response(
         JSON.stringify({ message: "Missing required fields" }),
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -51,7 +48,8 @@ export const POST: APIRoute = async ({ request }) => {
 
     const id = uuidv4();
 
-    await db()
+    //FIXED: db.insert instead of db().insert
+    await db
       .insert(attendanceTable)
       .values({
         id,
@@ -72,9 +70,7 @@ export const POST: APIRoute = async ({ request }) => {
     console.error("Error creating attendance:", error);
     return new Response(
       JSON.stringify({ message: "Error creating attendance" }),
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 };
