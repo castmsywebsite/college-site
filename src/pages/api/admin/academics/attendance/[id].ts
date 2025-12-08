@@ -24,9 +24,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     if (!title || !level || !program || !semester || !dateStr) {
       return new Response(
         JSON.stringify({ message: "Missing required fields" }),
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -37,7 +35,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
       link = await uploadDocument(file, file.name);
     }
 
-    await db()
+    //FIXED: db.update instead of db().update
+    await db
       .update(attendanceTable)
       .set({
         title,
@@ -58,9 +57,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     console.error("Error updating attendance:", error);
     return new Response(
       JSON.stringify({ message: "Error updating attendance" }),
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 };
@@ -74,7 +71,8 @@ export const DELETE: APIRoute = async ({ params }) => {
       });
     }
 
-    await db().delete(attendanceTable).where(eq(attendanceTable.id, id));
+    //FIXED: db.delete instead of db().delete
+    await db.delete(attendanceTable).where(eq(attendanceTable.id, id));
 
     return new Response(JSON.stringify({ message: "Attendance deleted" }), {
       status: 200,
@@ -83,9 +81,7 @@ export const DELETE: APIRoute = async ({ params }) => {
     console.error("Error deleting attendance:", error);
     return new Response(
       JSON.stringify({ message: "Error deleting attendance" }),
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 };
