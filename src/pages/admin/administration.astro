@@ -2,12 +2,11 @@
 import AdminLayout from "@/layouts/AdminLayout.astro";
 
 if (!Astro.locals.user) {
-  console.log(Astro.locals.user);
   return Astro.redirect("/");
 }
 ---
 
-<AdminLayout>
+<AdminLayout title="Manage Administration">
   <section class="mx-auto max-w-5xl px-4 py-10 min-h-screen">
     <header class="mb-6 flex items-center justify-between">
       <div>
@@ -15,13 +14,13 @@ if (!Astro.locals.user) {
           Manage Administration
         </h1>
         <p class="text-muted-foreground mt-1">
-          Add and edit principal, HODs and faculty.
+          Add and edit principal, HODs, faculty, and support staff.
         </p>
       </div>
       <a
         href="#"
         id="openForm"
-        class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+        class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition"
         >Add Staff</a
       >
     </header>
@@ -91,84 +90,179 @@ if (!Astro.locals.user) {
       </div>
     </div>
   </section>
+
+  <!-- Add / Edit Staff Modal -->
   <div class="flex justify-center items-center h-screen w-full">
     <dialog
       id="staffDialog"
-      class="rounded-xl border bg-card p-0 shadow-lg fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+      class="rounded-xl border bg-card p-0 shadow-xl fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[92vh] overflow-y-auto"
     >
-      <form id="staffForm" class="w-[min(92vw,520px)] p-6">
-        <h2 class="mb-4 text-lg font-semibold">Staff Details</h2>
+      <form id="staffForm" class="w-[min(92vw,540px)] p-6">
+        <div class="flex items-center justify-between border-b pb-3 mb-4">
+          <h2 id="modalTitle" class="text-lg font-semibold">Staff Details</h2>
+          <button
+            type="button"
+            id="modalCloseBtn"
+            class="text-muted-foreground hover:text-foreground text-lg leading-none"
+            aria-label="Close"
+          >&times;</button>
+        </div>
+
         <div class="grid gap-3">
+          <!-- Name -->
           <label class="grid gap-1">
-            <span class="text-sm">Name</span>
-            <input name="name" class="rounded-md border px-3 py-2" required />
+            <span class="text-sm font-medium">Name <span class="text-red-500">*</span></span>
+            <input name="name" class="rounded-md border px-3 py-2 bg-background" placeholder="e.g. Dr. Jane Doe" required />
           </label>
+
+          <!-- Position -->
           <label class="grid gap-1">
-            <span class="text-sm">Position</span>
+            <span class="text-sm font-medium">Position <span class="text-red-500">*</span></span>
             <input
               name="position"
-              class="rounded-md border px-3 py-2"
+              class="rounded-md border px-3 py-2 bg-background"
+              placeholder="e.g. Assistant Professor"
               required
             />
           </label>
+
+          <!-- Qualification -->
           <label class="grid gap-1">
-            <span class="text-sm">Qualification</span>
-            <input name="qualification" class="rounded-md border px-3 py-2" />
+            <span class="text-sm font-medium">Qualification</span>
+            <input name="qualification" class="rounded-md border px-3 py-2 bg-background" placeholder="e.g. Ph.D, M.Tech" />
           </label>
+
+          <!-- Experience -->
           <label class="grid gap-1">
-            <span class="text-sm">Experience</span>
-            <input name="experience" class="rounded-md border px-3 py-2" />
+            <span class="text-sm font-medium">Experience</span>
+            <input name="experience" class="rounded-md border px-3 py-2 bg-background" placeholder="e.g. 5+ years" />
           </label>
+
+          <!-- Email & Phone -->
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label class="grid gap-1">
-              <span class="text-sm">Email</span>
+              <span class="text-sm font-medium">Email</span>
               <input
                 name="email"
                 type="email"
-                class="rounded-md border px-3 py-2"
+                class="rounded-md border px-3 py-2 bg-background"
+                placeholder="staff@college.edu"
               />
             </label>
             <label class="grid gap-1">
-              <span class="text-sm">Phone</span>
-              <input name="phone" class="rounded-md border px-3 py-2" />
+              <span class="text-sm font-medium">Phone</span>
+              <input name="phone" class="rounded-md border px-3 py-2 bg-background" placeholder="+91 ..." />
             </label>
           </div>
+
+          <!-- Staff Category -->
           <label class="grid gap-1">
-            <span class="text-sm">Image URL</span>
-            <input name="image" class="rounded-md border px-3 py-2" />
-          </label>
-          <label class="grid gap-1">
-            <span class="text-sm">Category</span>
+            <span class="text-sm font-medium">Category <span class="text-red-500">*</span></span>
             <select
               name="category"
-              class="rounded-md border px-3 py-2"
+              id="categorySelect"
+              class="rounded-md border px-3 py-2 bg-background"
               required
             >
               <option value="principal">Principal</option>
               <option value="hod">HOD</option>
-              <option value="faculty">Faculty</option>
+              <option value="faculty" selected>Faculty</option>
               <option value="non-teaching">Non-Teaching Faculty</option>
             </select>
           </label>
+
+          <!-- Conditional Department Dropdown -->
+          <div id="departmentField" class="grid gap-1">
+            <label for="departmentSelect" class="text-sm font-medium">
+              Department <span class="text-red-500">*</span>
+            </label>
+            <select
+              name="department"
+              id="departmentSelect"
+              class="rounded-md border px-3 py-2 bg-background"
+            >
+              <option value="">Select Department</option>
+              <option value="Computer">Computer</option>
+              <option value="English">English</option>
+              <option value="Commerce">Commerce</option>
+              <option value="Others" id="optOthers">Others</option>
+            </select>
+            <p id="deptHint" class="text-xs text-muted-foreground"></p>
+          </div>
+
+          <!-- Direct Image Upload to Supabase Storage -->
+          <div class="grid gap-1.5">
+            <span class="text-sm font-medium">Staff Photo</span>
+            <input type="hidden" name="image" id="imageUrlInput" />
+            
+            <div class="flex items-start gap-3 p-3 rounded-lg border bg-muted/20">
+              <div class="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-muted flex items-center justify-center">
+                <img
+                  id="imagePreview"
+                  src="/assets/images/princi.jpg"
+                  alt="Staff Preview"
+                  class="h-full w-full object-cover hidden"
+                />
+                <span id="imagePlaceholder" class="text-2xl text-muted-foreground">👤</span>
+              </div>
+
+              <div class="flex-1 space-y-1.5 min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    id="staffImageInput"
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                    class="hidden"
+                  />
+                  <button
+                    type="button"
+                    id="selectImageBtn"
+                    class="rounded-md border bg-background px-3 py-1 text-xs font-medium hover:bg-muted transition"
+                  >
+                    Select Photo
+                  </button>
+                  <button
+                    type="button"
+                    id="removeImageBtn"
+                    class="rounded-md border border-destructive/30 px-2 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 hidden"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div id="imageFileInfo" class="text-xs text-muted-foreground truncate">
+                  JPG, JPEG, PNG, or WebP (max 5MB)
+                </div>
+                <div id="uploadFeedback" class="text-xs font-medium hidden"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Achievements -->
           <label class="grid gap-1">
-            <span class="text-sm">Achievements (comma separated)</span>
+            <span class="text-sm font-medium">Achievements (comma separated)</span>
             <input
               name="achievements"
-              class="rounded-md border px-3 py-2"
-              placeholder="Published 10 papers, Award X"
+              class="rounded-md border px-3 py-2 bg-background"
+              placeholder="e.g. Published 10 papers, State Award"
             />
           </label>
         </div>
-        <div class="mt-5 flex items-center justify-end gap-3">
+
+        <!-- Form Error Notice -->
+        <div id="formErrorNotice" class="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2 hidden"></div>
+
+        <!-- Action Buttons -->
+        <div class="mt-6 flex items-center justify-end gap-3 border-t pt-4">
           <button
             type="button"
             id="cancelBtn"
-            class="rounded-md border px-4 py-2 text-sm">Cancel</button
+            class="rounded-md border px-4 py-2 text-sm hover:bg-muted transition"
+            >Cancel</button
           >
           <button
             type="submit"
             id="saveBtn"
-            class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white"
+            class="rounded-md bg-primary px-5 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50"
             >Save</button
           >
         </div>
@@ -179,7 +273,8 @@ if (!Astro.locals.user) {
 
   <style>
     dialog::backdrop {
-      background: rgba(0, 0, 0, 0.4);
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(2px);
     }
   </style>
 
@@ -190,10 +285,200 @@ if (!Astro.locals.user) {
     const emptyAddBtn = document.getElementById("emptyAddBtn");
     const dialog = document.getElementById("staffDialog");
     const form = document.getElementById("staffForm");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalCloseBtn = document.getElementById("modalCloseBtn");
     const openForm = document.getElementById("openForm");
     const cancelBtn = document.getElementById("cancelBtn");
     const saveBtn = document.getElementById("saveBtn");
+    const formErrorNotice = document.getElementById("formErrorNotice");
 
+    // Category and Department elements
+    const categorySelect = document.getElementById("categorySelect");
+    const departmentField = document.getElementById("departmentField");
+    const departmentSelect = document.getElementById("departmentSelect");
+    const optOthers = document.getElementById("optOthers");
+    const deptHint = document.getElementById("deptHint");
+
+    // Image upload elements
+    const imageUrlInput = document.getElementById("imageUrlInput");
+    const staffImageInput = document.getElementById("staffImageInput");
+    const selectImageBtn = document.getElementById("selectImageBtn");
+    const removeImageBtn = document.getElementById("removeImageBtn");
+    const imagePreview = document.getElementById("imagePreview");
+    const imagePlaceholder = document.getElementById("imagePlaceholder");
+    const imageFileInfo = document.getElementById("imageFileInfo");
+    const uploadFeedback = document.getElementById("uploadFeedback");
+
+    /**
+     * Updates Department field visibility and allowed options based on selected category.
+     * Required behavior:
+     * - Principal: Hidden, not required
+     * - HOD: Visible, required, options: Computer, English, Commerce (No Others)
+     * - Faculty: Visible, required, options: Computer, English, Commerce, Others
+     * - Non-Teaching Faculty: Hidden, not required
+     */
+    function updateDepartmentVisibility(targetDepartment = null) {
+      const cat = (categorySelect?.value || "").toLowerCase();
+
+      if (cat === "principal" || cat === "non-teaching") {
+        departmentField.classList.add("hidden");
+        departmentSelect.removeAttribute("required");
+        departmentSelect.value = "";
+        deptHint.textContent = "";
+      } else if (cat === "hod") {
+        departmentField.classList.remove("hidden");
+        departmentSelect.setAttribute("required", "required");
+        optOthers.hidden = true;
+        optOthers.disabled = true;
+        deptHint.textContent = "Select HOD department (Computer, English, or Commerce)";
+
+        if (departmentSelect.value === "Others") {
+          departmentSelect.value = "";
+        }
+        if (targetDepartment && targetDepartment !== "Others") {
+          departmentSelect.value = targetDepartment;
+        }
+      } else if (cat === "faculty") {
+        departmentField.classList.remove("hidden");
+        departmentSelect.setAttribute("required", "required");
+        optOthers.hidden = false;
+        optOthers.disabled = false;
+        deptHint.textContent = "Select faculty department (Computer, English, Commerce, or Others)";
+
+        if (targetDepartment) {
+          departmentSelect.value = targetDepartment;
+        }
+      }
+    }
+
+    categorySelect?.addEventListener("change", () => {
+      updateDepartmentVisibility();
+    });
+
+    /**
+     * Resets the image preview and upload status
+     */
+    function resetImageState() {
+      imageUrlInput.value = "";
+      staffImageInput.value = "";
+      imagePreview.src = "";
+      imagePreview.classList.add("hidden");
+      imagePlaceholder.classList.remove("hidden");
+      removeImageBtn.classList.add("hidden");
+      imageFileInfo.textContent = "JPG, JPEG, PNG, or WebP (max 5MB)";
+      uploadFeedback.textContent = "";
+      uploadFeedback.classList.add("hidden");
+    }
+
+    /**
+     * Sets an existing image in the preview box
+     */
+    function setExistingImage(url) {
+      if (!url) {
+        resetImageState();
+        return;
+      }
+      imageUrlInput.value = url;
+      imagePreview.src = url;
+      imagePreview.classList.remove("hidden");
+      imagePlaceholder.classList.add("hidden");
+      removeImageBtn.classList.remove("hidden");
+      imageFileInfo.textContent = "Current photo";
+      uploadFeedback.textContent = "";
+      uploadFeedback.classList.add("hidden");
+    }
+
+    // Trigger file chooser
+    selectImageBtn?.addEventListener("click", () => staffImageInput?.click());
+
+    // Remove photo
+    removeImageBtn?.addEventListener("click", () => {
+      resetImageState();
+    });
+
+    // Handle file selection and direct upload to Supabase Storage
+    staffImageInput?.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // Validate format
+      const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+      if (!validTypes.includes(file.type.toLowerCase())) {
+        showUploadStatus("Invalid file format. Please choose JPG, PNG, or WebP.", "error");
+        staffImageInput.value = "";
+        return;
+      }
+
+      // Validate size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showUploadStatus("File size exceeds 5MB limit.", "error");
+        staffImageInput.value = "";
+        return;
+      }
+
+      // Display immediate local preview
+      const localPreviewUrl = URL.createObjectURL(file);
+      imagePreview.src = localPreviewUrl;
+      imagePreview.classList.remove("hidden");
+      imagePlaceholder.classList.add("hidden");
+      removeImageBtn.classList.remove("hidden");
+      imageFileInfo.textContent = `${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+
+      // Upload to Supabase Storage via backend API
+      showUploadStatus("Uploading to storage...", "loading");
+      saveBtn.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/admin/administration/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Upload failed");
+        }
+
+        imageUrlInput.value = data.url;
+        showUploadStatus("✓ Uploaded to Supabase", "success");
+      } catch (err) {
+        console.error("Staff image upload failed:", err);
+        showUploadStatus(err.message || "Upload failed. Please try again.", "error");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    function showUploadStatus(msg, type) {
+      uploadFeedback.textContent = msg;
+      uploadFeedback.classList.remove("hidden");
+      if (type === "loading") {
+        uploadFeedback.className = "text-xs font-medium text-blue-600";
+      } else if (type === "success") {
+        uploadFeedback.className = "text-xs font-medium text-green-600";
+      } else {
+        uploadFeedback.className = "text-xs font-medium text-red-600";
+      }
+    }
+
+    function showFormError(msg) {
+      if (formErrorNotice) {
+        formErrorNotice.textContent = msg;
+        formErrorNotice.classList.remove("hidden");
+      }
+    }
+
+    function clearFormError() {
+      if (formErrorNotice) {
+        formErrorNotice.textContent = "";
+        formErrorNotice.classList.add("hidden");
+      }
+    }
+
+    // Load staff records
     async function loadStaff() {
       if (!grid) return;
 
@@ -216,20 +501,32 @@ if (!Astro.locals.user) {
           const card = document.createElement("div");
           card.setAttribute("data-staff-card", "");
           card.className =
-            "rounded-xl border bg-card p-4 shadow-sm transition hover:shadow-md hover:border-primary/30";
+            "rounded-xl border bg-card p-4 shadow-sm transition hover:shadow-md hover:border-primary/30 flex flex-col justify-between";
+
+          const deptBadge = s.department ? ` • ${s.department}` : (s.departmentName ? ` • ${s.departmentName}` : "");
+          const categoryDisplay = s.category.toUpperCase();
+
           card.innerHTML = `
-            <div class="flex items-center gap-3">
-              <img src="${s.image || "/assets/images/princi.jpg"}" alt="${s.name}" class="h-14 w-14 rounded-lg object-cover" />
-              <div>
-                <div class="font-medium">${s.name}</div>
-                <div class="text-muted-foreground text-sm">${s.position} • ${s.category}</div>
+            <div>
+              <div class="flex items-center gap-3">
+                <img
+                  src="${s.image || "/assets/images/princi.jpg"}"
+                  alt="${s.name}"
+                  class="h-14 w-14 rounded-lg object-cover bg-muted border"
+                  onerror="this.src='/assets/images/princi.jpg'"
+                />
+                <div>
+                  <div class="font-medium text-foreground">${s.name}</div>
+                  <div class="text-muted-foreground text-xs font-medium">${s.position}</div>
+                  <div class="text-primary text-xs mt-0.5 font-semibold">${categoryDisplay}${deptBadge}</div>
+                </div>
               </div>
+              <div class="mt-3 text-sm text-foreground/80">${s.qualification || ""}</div>
+              <div class="mt-1 text-muted-foreground text-xs">${s.email || ""} ${s.phone ? "• " + s.phone : ""}</div>
             </div>
-            <div class="mt-3 text-sm">${s.qualification || ""}</div>
-            <div class="mt-1 text-muted-foreground text-xs">${s.email || ""} ${s.phone ? "• " + s.phone : ""}</div>
-            <div class="mt-4 flex gap-2">
-              <button data-edit="${s.id}" class="rounded-md border px-3 py-1.5 text-sm">Edit</button>
-              <button data-delete="${s.id}" class="rounded-md bg-destructive px-3 py-1.5 text-sm text-white">Delete</button>
+            <div class="mt-4 flex gap-2 border-t pt-3">
+              <button data-edit="${s.id}" class="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition">Edit</button>
+              <button data-delete="${s.id}" class="rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition">Delete</button>
             </div>
           `;
           grid.appendChild(card);
@@ -237,21 +534,31 @@ if (!Astro.locals.user) {
       } catch (err) {
         console.error("Failed to load staff:", err);
         grid.innerHTML =
-          "<div class='col-span-full text-center text-red-500'>Failed to load staff data.</div>";
+          "<div class='col-span-full text-center text-red-500 py-8'>Failed to load staff data.</div>";
       } finally {
         if (loadingIndicator) loadingIndicator.style.display = "none";
       }
     }
 
+    // Open Add Staff Modal
     if (openForm && form && dialog) {
       openForm.addEventListener("click", (e) => {
         e.preventDefault();
         form.reset();
+        clearFormError();
+        resetImageState();
         form.querySelector('input[name="id"]').value = "";
+        modalTitle.textContent = "Add Staff";
+        categorySelect.value = "faculty";
+        updateDepartmentVisibility();
         dialog.showModal();
         const firstInput = form.querySelector('input[name="name"]');
         if (firstInput) firstInput.focus();
       });
+    }
+
+    if (modalCloseBtn && dialog) {
+      modalCloseBtn.addEventListener("click", () => dialog.close());
     }
 
     if (cancelBtn && dialog) {
@@ -265,72 +572,115 @@ if (!Astro.locals.user) {
       });
     }
 
+    // Grid Actions: Edit & Delete
     if (grid && form && dialog) {
       grid.addEventListener("click", async (e) => {
         const t = e.target instanceof Element ? e.target : null;
         if (!t) return;
 
+        // Edit Staff
         if (t.matches("[data-edit]")) {
           const id = t.getAttribute("data-edit");
           if (!id) return;
-          const res = await fetch(`/api/admin/administration/${id}`);
-          const s = await res.json();
-          const entries = Object.entries(s);
 
-          for (const [k, v] of entries) {
-            const el = form.querySelector(`[name="${k}"]`);
-            if (k === "achievements" && Array.isArray(v)) {
-              if (el instanceof HTMLInputElement) el.value = v.join(", ");
-            } else if (
-              el instanceof HTMLInputElement ||
-              el instanceof HTMLSelectElement
-            ) {
-              el.value = String(v ?? "");
+          clearFormError();
+          resetImageState();
+          modalTitle.textContent = "Edit Staff";
+
+          try {
+            const res = await fetch(`/api/admin/administration/${id}`);
+            if (!res.ok) throw new Error("Failed to load staff details");
+            const s = await res.json();
+
+            // Populate text inputs
+            const textFields = ["id", "name", "position", "qualification", "experience", "email", "phone"];
+            textFields.forEach((field) => {
+              const el = form.querySelector(`[name="${field}"]`);
+              if (el) el.value = s[field] || "";
+            });
+
+            // Achievements
+            const achievementsEl = form.querySelector('[name="achievements"]');
+            if (achievementsEl) {
+              achievementsEl.value = Array.isArray(s.achievements) ? s.achievements.join(", ") : "";
             }
-          }
 
-          dialog.showModal();
-          const firstInput = form.querySelector('input[name="name"]');
-          if (firstInput) firstInput.focus();
+            // Category & Department
+            categorySelect.value = s.category || "faculty";
+            updateDepartmentVisibility(s.department || "");
+
+            // Photo
+            setExistingImage(s.image);
+
+            dialog.showModal();
+            const firstInput = form.querySelector('input[name="name"]');
+            if (firstInput) firstInput.focus();
+          } catch (err) {
+            console.error("Failed to load staff record:", err);
+            alert("Failed to load staff details.");
+          }
         }
 
+        // Delete Staff
         if (t.matches("[data-delete]")) {
           const id = t.getAttribute("data-delete");
           if (!id) return;
-          if (confirm("Delete this staff entry?")) {
-            await fetch(`/api/admin/administration/${id}`, {
-              method: "DELETE",
-            });
-            loadStaff();
+          if (confirm("Are you sure you want to delete this staff record?")) {
+            try {
+              await fetch(`/api/admin/administration/${id}`, {
+                method: "DELETE",
+              });
+              loadStaff();
+            } catch (err) {
+              console.error("Failed to delete staff:", err);
+              alert("Failed to delete staff.");
+            }
           }
         }
       });
     }
 
+    // Form Submit Handler
     if (form && dialog && saveBtn) {
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
+        clearFormError();
+
+        const cat = (categorySelect?.value || "").toLowerCase();
+        const dept = departmentSelect?.value || "";
+
+        // Client validation
+        if ((cat === "hod" || cat === "faculty") && !dept) {
+          showFormError("Please select a department for this category.");
+          departmentSelect.focus();
+          return;
+        }
+
+        if (cat === "hod" && dept === "Others") {
+          showFormError("HOD cannot be assigned to 'Others'. Please select Computer, English, or Commerce.");
+          departmentSelect.focus();
+          return;
+        }
+
         saveBtn.disabled = true;
         saveBtn.textContent = "Saving...";
 
         const fd = new FormData(form);
         const raw = Object.fromEntries(fd.entries());
-        const achievementsStr = raw.achievements
-          ? String(raw.achievements)
-          : "";
+        const achievementsStr = raw.achievements ? String(raw.achievements) : "";
         const idStr = raw.id ? String(raw.id) : "";
+
         const bodyPayload = {
           id: idStr || undefined,
-          name: String(raw.name || ""),
-          position: String(raw.position || ""),
-          qualification: raw.qualification
-            ? String(raw.qualification)
-            : undefined,
-          experience: raw.experience ? String(raw.experience) : undefined,
-          email: raw.email ? String(raw.email) : undefined,
-          phone: raw.phone ? String(raw.phone) : undefined,
-          image: raw.image ? String(raw.image) : undefined,
-          category: String(raw.category || "faculty"),
+          name: String(raw.name || "").trim(),
+          position: String(raw.position || "").trim(),
+          qualification: raw.qualification ? String(raw.qualification).trim() : null,
+          experience: raw.experience ? String(raw.experience).trim() : null,
+          email: raw.email ? String(raw.email).trim() : null,
+          phone: raw.phone ? String(raw.phone).trim() : null,
+          image: imageUrlInput.value ? String(imageUrlInput.value).trim() : null,
+          category: cat,
+          department: (cat === "hod" || cat === "faculty") ? dept : null,
           achievements: achievementsStr
             ? achievementsStr
                 .split(",")
@@ -338,22 +688,29 @@ if (!Astro.locals.user) {
                 .filter(Boolean)
             : [],
         };
+
         const method = idStr ? "PUT" : "POST";
         const url = idStr
           ? `/api/admin/administration/${idStr}`
           : "/api/admin/administration";
 
         try {
-          await fetch(url, {
+          const res = await fetch(url, {
             method,
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(bodyPayload),
           });
+
+          const result = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(result.error || `Failed to save staff (${res.status})`);
+          }
+
           dialog.close();
           loadStaff();
         } catch (err) {
           console.error("Failed to save staff:", err);
-          alert("Failed to save staff.");
+          showFormError(err.message || "Failed to save staff record.");
         } finally {
           saveBtn.disabled = false;
           saveBtn.textContent = "Save";

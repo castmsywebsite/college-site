@@ -17,7 +17,8 @@ type StaffItem = {
   image: string | null;
   achievements: string[] | null;
   category?: string;
-  departmentName: string | null; // Added from the API join
+  departmentName?: string | null;
+  department?: string | null;
 };
 
 const AdministrationSection: React.FC = () => {
@@ -78,13 +79,25 @@ const AdministrationSection: React.FC = () => {
             case "hod":
               nextData.hods.push(row);
               break;
-            case "faculty":
-              const deptName = row.departmentName || "Others";
+            case "faculty": {
+              let deptName = "Others";
+              const rawDept = (row.department || row.departmentName || "").trim().toLowerCase();
+              if (rawDept.includes("computer")) {
+                deptName = "Department of Computer Science";
+              } else if (rawDept.includes("english")) {
+                deptName = "Department of English";
+              } else if (rawDept.includes("commerce")) {
+                deptName = "Department of Commerce";
+              } else {
+                deptName = "Others";
+              }
+
               if (!nextData.faculty[deptName]) {
                 nextData.faculty[deptName] = [];
               }
               nextData.faculty[deptName].push(row);
               break;
+            }
             case "non-teaching":
               nextData.nonTeaching.push(row);
               break;
@@ -215,8 +228,22 @@ const AdministrationSection: React.FC = () => {
             ))}
           </div>
         );
-      case "faculty":
-        const departments = Object.keys(staffData.faculty);
+      case "faculty": {
+        const canonicalOrder = [
+          "Department of Computer Science",
+          "Department of English",
+          "Department of Commerce",
+          "Others",
+        ];
+        const departments = Object.keys(staffData.faculty).sort((a, b) => {
+          const idxA = canonicalOrder.indexOf(a);
+          const idxB = canonicalOrder.indexOf(b);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return a.localeCompare(b);
+        });
+
         return (
           <div className="space-y-12">
             {departments.map((deptName) => (
@@ -226,13 +253,14 @@ const AdministrationSection: React.FC = () => {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {staffData.faculty[deptName].map((person, index) => (
-                    <StaffCard person={person} index={index} />
+                    <StaffCard key={person.id || index} person={person} index={index} />
                   ))}
                 </div>
               </section>
             ))}
           </div>
         );
+      }
       default:
         return null;
     }
