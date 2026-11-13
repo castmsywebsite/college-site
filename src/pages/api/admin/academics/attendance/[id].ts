@@ -2,8 +2,15 @@ import type { APIRoute } from "astro";
 import { db } from "@/db";
 import { attendanceTable } from "@/db/schema/academics";
 import { eq } from "drizzle-orm";
+import { requireAdminAuth } from "@/lib/api-auth";
 
-export const PUT: APIRoute = async ({ params, request }) => {
+export const PUT: APIRoute = async (ctx) => {
+  const auth = requireAdminAuth(ctx);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  const { params, request } = ctx;
   try {
     const { id } = params;
     if (!id) {
@@ -62,7 +69,13 @@ export const PUT: APIRoute = async ({ params, request }) => {
   }
 };
 
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = async (ctx) => {
+  const auth = requireAdminAuth(ctx);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  const { params } = ctx;
   try {
     const { id } = params;
     if (!id) {

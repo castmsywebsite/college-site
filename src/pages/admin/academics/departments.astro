@@ -1,7 +1,7 @@
 ---
 import AdminLayout from "@/layouts/AdminLayout.astro";
 if (!Astro.locals.session) {
-  return Astro.redirect("/");
+  return Astro.redirect("/admin/admin-login-user-access");
 }
 ---
 
@@ -179,71 +179,122 @@ if (!Astro.locals.session) {
       }
     }
 
+    // SEC-HIGH-02: Safe DOM construction preventing Stored XSS
     function renderDepartments() {
       const container = document.getElementById("departments-list");
+      container.innerHTML = "";
+
       if (departments.length === 0) {
-        container.innerHTML =
-          '<p class="text-center text-gray-500 py-8">No departments found. Add your first department!</p>';
+        const emptyP = document.createElement("p");
+        emptyP.className = "text-center text-gray-500 py-8";
+        emptyP.textContent = "No departments found. Add your first department!";
+        container.appendChild(emptyP);
         return;
       }
 
-      container.innerHTML = departments
-        .map(
-          (department) => `
-        <div class="rounded-lg border bg-white p-4">
-          <div class="flex items-start justify-between">
-            <div class="flex-1">
-              <h3 class="text-lg font-semibold">${department.name}</h3>
-              <div class="mt-2 grid grid-cols-2 gap-4 text-sm text-gray-600">
-                <div><span class="font-medium">HOD:</span> ${department.hod}</div>
-                <div><span class="font-medium">Faculty:</span> ${department.faculty}</div>
-                <div><span class="font-medium">Labs:</span> ${department.labs}</div>
-                <div><span class="font-medium">Specializations:</span> ${department.specializations ? department.specializations.length : 0}</div>
-              </div>
-              ${department.description ? `<p class="mt-2 text-sm text-gray-600">${department.description}</p>` : ""}
-              ${
-                department.specializations &&
-                department.specializations.length > 0
-                  ? `
-                <div class="mt-2">
-                  <span class="text-sm font-medium text-gray-700">Specializations:</span>
-                  <div class="mt-1 flex flex-wrap gap-1">
-                    ${department.specializations
-                      .map(
-                        (spec) => `
-                      <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-                        ${spec}
-                      </span>
-                    `
-                      )
-                      .join("")}
-                  </div>
-                </div>
-              `
-                  : ""
-              }
-            </div>
-            <div class="ml-4 flex space-x-2">
-              <button
-                data-department-id="${department.id}"
-                class="edit-department-btn rounded-md bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100"
-              >
-                Edit
-              </button>
-              <button
-                data-department-id="${department.id}"
-                class="delete-department-btn rounded-md bg-red-50 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-100"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      `
-        )
-        .join("");
+      departments.forEach((department) => {
+        const card = document.createElement("div");
+        card.className = "rounded-lg border bg-white p-4";
 
-      addButtonEventListeners();
+        const flexWrapper = document.createElement("div");
+        flexWrapper.className = "flex items-start justify-between";
+
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "flex-1";
+
+        const titleH3 = document.createElement("h3");
+        titleH3.className = "text-lg font-semibold";
+        titleH3.textContent = department.name || "";
+        contentDiv.appendChild(titleH3);
+
+        const statsGrid = document.createElement("div");
+        statsGrid.className = "mt-2 grid grid-cols-2 gap-4 text-sm text-gray-600";
+
+        const hodDiv = document.createElement("div");
+        const hodLabel = document.createElement("span");
+        hodLabel.className = "font-medium";
+        hodLabel.textContent = "HOD: ";
+        hodDiv.appendChild(hodLabel);
+        hodDiv.appendChild(document.createTextNode(department.hod || ""));
+
+        const facultyDiv = document.createElement("div");
+        const facultyLabel = document.createElement("span");
+        facultyLabel.className = "font-medium";
+        facultyLabel.textContent = "Faculty: ";
+        facultyDiv.appendChild(facultyLabel);
+        facultyDiv.appendChild(document.createTextNode(String(department.faculty ?? 0)));
+
+        const labsDiv = document.createElement("div");
+        const labsLabel = document.createElement("span");
+        labsLabel.className = "font-medium";
+        labsLabel.textContent = "Labs: ";
+        labsDiv.appendChild(labsLabel);
+        labsDiv.appendChild(document.createTextNode(String(department.labs ?? 0)));
+
+        const specsCountDiv = document.createElement("div");
+        const specsLabel = document.createElement("span");
+        specsLabel.className = "font-medium";
+        specsLabel.textContent = "Specializations: ";
+        specsCountDiv.appendChild(specsLabel);
+        specsCountDiv.appendChild(document.createTextNode(String(department.specializations ? department.specializations.length : 0)));
+
+        statsGrid.appendChild(hodDiv);
+        statsGrid.appendChild(facultyDiv);
+        statsGrid.appendChild(labsDiv);
+        statsGrid.appendChild(specsCountDiv);
+        contentDiv.appendChild(statsGrid);
+
+        if (department.description) {
+          const descP = document.createElement("p");
+          descP.className = "mt-2 text-sm text-gray-600";
+          descP.textContent = department.description;
+          contentDiv.appendChild(descP);
+        }
+
+        if (department.specializations && department.specializations.length > 0) {
+          const specsWrapper = document.createElement("div");
+          specsWrapper.className = "mt-2";
+
+          const specsHeader = document.createElement("span");
+          specsHeader.className = "text-sm font-medium text-gray-700";
+          specsHeader.textContent = "Specializations:";
+          specsWrapper.appendChild(specsHeader);
+
+          const specsTags = document.createElement("div");
+          specsTags.className = "mt-1 flex flex-wrap gap-1";
+
+          department.specializations.forEach((spec) => {
+            const tag = document.createElement("span");
+            tag.className = "inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700";
+            tag.textContent = spec;
+            specsTags.appendChild(tag);
+          });
+
+          specsWrapper.appendChild(specsTags);
+          contentDiv.appendChild(specsWrapper);
+        }
+
+        flexWrapper.appendChild(contentDiv);
+
+        const actionsDiv = document.createElement("div");
+        actionsDiv.className = "ml-4 flex space-x-2";
+
+        const editBtn = document.createElement("button");
+        editBtn.className = "edit-department-btn rounded-md bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100";
+        editBtn.textContent = "Edit";
+        editBtn.addEventListener("click", () => editDepartment(department.id));
+        actionsDiv.appendChild(editBtn);
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "delete-department-btn rounded-md bg-red-50 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-100";
+        deleteBtn.textContent = "Delete";
+        deleteBtn.addEventListener("click", () => deleteDepartment(department.id));
+        actionsDiv.appendChild(deleteBtn);
+
+        flexWrapper.appendChild(actionsDiv);
+        card.appendChild(flexWrapper);
+        container.appendChild(card);
+      });
     }
 
     function addButtonEventListeners() {

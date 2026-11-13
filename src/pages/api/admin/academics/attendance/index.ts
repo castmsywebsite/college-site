@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { attendanceTable } from "@/db/schema/academics";
 import { desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+import { requireAdminAuth } from "@/lib/api-auth";
 
 export const GET: APIRoute = async () => {
   try {
@@ -20,7 +21,13 @@ export const GET: APIRoute = async () => {
   }
 };
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (ctx) => {
+  const auth = requireAdminAuth(ctx);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  const { request } = ctx;
   try {
     const formData = await request.formData();
     const title = formData.get("title") as string;

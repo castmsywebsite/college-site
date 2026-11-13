@@ -41,7 +41,10 @@ export const GET: APIRoute = async (ctx) => {
     });
   } catch (error) {
     console.error("Failed to fetch staff list:", error);
-    return new Response(`Internal Server Error: ${error}`, { status: 500 });
+    return new Response(
+      JSON.stringify({ error: "Internal Server Error", message: "Failed to fetch staff list" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 };
 

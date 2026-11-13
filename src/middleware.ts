@@ -9,33 +9,72 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const sessionId = context.cookies.get(Auth.sessionCookieName)?.value;
   if (!sessionId) {
-    console.log("no session id");
     context.locals.user = null;
     context.locals.session = null;
-    return next();
-  }
-  const { session, user } = await auth.validateSession(sessionId);
-
-  // Set cookies BEFORE calling next()
-  if (session) {
-    const sessionCookie = auth.createSessionCookie(session.id);
-    context.cookies.set(
-      sessionCookie.name,
-      sessionCookie.value,
-      sessionCookie.attributes
-    );
   } else {
-    console.log("no session");
-    const sessionCookie = auth.clearSessionCookie();
-    context.cookies.set(
-      sessionCookie.name,
-      sessionCookie.value,
-      sessionCookie.attributes
-    );
+    const { session, user } = await auth.validateSession(sessionId);
+
+    // Set cookies BEFORE calling next()
+    if (session) {
+      const sessionCookie = auth.createSessionCookie(session.id);
+      context.cookies.set(
+        sessionCookie.name,
+        sessionCookie.value,
+        sessionCookie.attributes
+      );
+    } else {
+      const sessionCookie = auth.clearSessionCookie();
+      context.cookies.set(
+        sessionCookie.name,
+        sessionCookie.value,
+        sessionCookie.attributes
+      );
+    }
+
+    context.locals.session = session;
+    context.locals.user = user;
   }
 
-  context.locals.session = session;
-  context.locals.user = user;
-  console.log(user);
-  return next();
+  const pathname = context.url.pathname;
+  const isProtectedAdminRoute =
+    (pathname === "/admin" || pathname.startsWith("/admin/")) &&
+    pathname !== "/admin/admin-login-user-access";
+
+  // PHASE 2.2: Centralized redirect for unauthenticated protected Admin requests
+  if (isProtectedAdminRoute && !context.locals.session) {
+    const redirectResponse = context.redirect("/admin/admin-login-user-access", 302);
+    redirectResponse.headers.set(
+      "Cache-Control",
+      "private, no-store, no-cache, must-revalidate, max-age=0"
+    );
+    redirectResponse.headers.set("Pragma", "no-cache");
+    redirectResponse.headers.set("Expires", "0");
+    redirectResponse.headers.set("X-Content-Type-Options", "nosniff");
+    redirectResponse.headers.set("X-Frame-Options", "SAMEORIGIN");
+    redirectResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    return redirectResponse;
+  }
+
+  const response = await next();
+
+  // SEC-HIGH Base Security Headers (safe, non-breaking baseline)
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "SAMEORIGIN");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=()"
+  );
+
+  // PHASE 2.2: Comprehensive Cache-Control for all Admin HTML & API responses
+  if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/admin")) {
+    response.headers.set(
+      "Cache-Control",
+      "private, no-store, no-cache, must-revalidate, max-age=0"
+    );
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+  }
+
+  return response;
 });

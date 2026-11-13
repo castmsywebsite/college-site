@@ -118,19 +118,21 @@ export class Auth {
       attributes: {
         httpOnly: true,
         secure: true,
-        sameSite: "none",
+        sameSite: "lax",
         path: "/",
         maxAge: maxAgeSeconds,
       },
     };
   }
-  public clearSessionCookie() {
+  public clearSessionCookie(): SessionCookie {
     return {
       name: Auth.sessionCookieName,
       value: "",
       attributes: {
         expires: new Date(0),
         httpOnly: true,
+        secure: true,
+        sameSite: "lax",
         path: "/",
       },
     };
