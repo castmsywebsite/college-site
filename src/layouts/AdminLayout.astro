@@ -62,12 +62,14 @@ const user = Astro.locals.user;
                 <span class="text-2xl">🏛️</span>
                 <span>CAS TMSY Admin</span>
               </a>
-              <nav class="hidden md:flex space-x-4 text-sm font-medium">
-                <a href="/admin" class={`px-3 py-2 rounded-md ${currentPath === "/admin" ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Dashboard</a>
-                <a href="/admin/administration" class={`px-3 py-2 rounded-md ${currentPath.startsWith("/admin/administration") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Staff</a>
-                <a href="/admin/academics" class={`px-3 py-2 rounded-md ${currentPath.startsWith("/admin/academics") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Academics</a>
-                <a href="/admin/announcements" class={`px-3 py-2 rounded-md ${currentPath.startsWith("/admin/announcements") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Announcements</a>
-                <a href="/admin/gallery" class={`px-3 py-2 rounded-md ${currentPath.startsWith("/admin/gallery") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Gallery</a>
+              <nav class="hidden md:flex space-x-3 text-sm font-medium">
+                <a href="/admin" class={`px-2.5 py-1.5 rounded-md ${currentPath === "/admin" ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Dashboard</a>
+                <a href="/admin/administration" class={`px-2.5 py-1.5 rounded-md ${currentPath.startsWith("/admin/administration") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Staff</a>
+                <a href="/admin/academics" class={`px-2.5 py-1.5 rounded-md ${currentPath.startsWith("/admin/academics") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Academics</a>
+                <a href="/admin/placements" class={`px-2.5 py-1.5 rounded-md ${currentPath.startsWith("/admin/placements") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Placements</a>
+                <a href="/admin/events" class={`px-2.5 py-1.5 rounded-md ${currentPath.startsWith("/admin/events") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Events</a>
+                <a href="/admin/announcements" class={`px-2.5 py-1.5 rounded-md ${currentPath.startsWith("/admin/announcements") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Announcements</a>
+                <a href="/admin/gallery" class={`px-2.5 py-1.5 rounded-md ${currentPath.startsWith("/admin/gallery") ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>Gallery</a>
               </nav>
             </div>
             <div class="flex items-center space-x-4">

@@ -1,0 +1,576 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+
+if (!Astro.locals.session) {
+  return Astro.redirect("/admin/admin-login-user-access");
+}
+---
+
+<AdminLayout title="Manage Home Page Events">
+  <div class="space-y-6 max-w-6xl mx-auto px-4 py-10">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">
+          Manage Home Page Events
+        </h1>
+        <p class="text-gray-500 mt-1">
+          Create, edit, organize, and publish events displayed on the college home page.
+        </p>
+      </div>
+      <button
+        id="addEventBtn"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-sm cursor-pointer"
+      >
+        <span class="text-xl leading-none">+</span> Add Event
+      </button>
+    </div>
+
+    <!-- Error / Success Alerts -->
+    <div id="alertContainer" class="hidden rounded-lg p-4 text-sm font-medium"></div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="py-12 flex justify-center items-center">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <span class="ml-3 text-gray-600">Loading home page events...</span>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden text-center py-16 bg-white rounded-xl border border-dashed border-gray-300 p-8">
+      <span class="text-4xl">🎉</span>
+      <h3 class="mt-2 text-lg font-semibold text-gray-900">No events found</h3>
+      <p class="mt-1 text-sm text-gray-500">Get started by publishing your first home page event.</p>
+      <button
+        id="emptyAddBtn"
+        class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
+      >
+        + Add Event
+      </button>
+    </div>
+
+    <!-- Events Grid -->
+    <div id="eventsGrid" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+
+    <!-- Event Modal (Add / Edit) -->
+    <div
+      id="eventModal"
+      class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto"
+    >
+      <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 my-8 transform transition-all">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-xl font-bold text-gray-900" id="modalTitle">
+            Add Home Page Event
+          </h2>
+          <button
+            id="closeModalBtn"
+            class="text-gray-400 hover:text-gray-600 transition-colors p-1"
+            aria-label="Close modal"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form id="eventForm" class="space-y-4">
+          <input type="hidden" id="eventId" name="id" />
+
+          <!-- Event Title -->
+          <div>
+            <label for="eventTitle" class="block text-sm font-medium text-gray-700 mb-1">
+              Event Title <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              id="eventTitle"
+              name="title"
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              placeholder="e.g. Best NSS Award 2024, Freshers Day celebration"
+            />
+          </div>
+
+          <!-- Event Date & Type -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="eventDate" class="block text-sm font-medium text-gray-700 mb-1">
+                Event Date <span class="text-gray-400 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                id="eventDate"
+                name="eventDate"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                placeholder="e.g. March 15-17, 2024"
+              />
+            </div>
+            <div>
+              <label for="eventType" class="block text-sm font-medium text-gray-700 mb-1">
+                Category / Badge <span class="text-gray-400 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                id="eventType"
+                name="eventType"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                placeholder="e.g. Cultural, Academic"
+              />
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div>
+            <label for="description" class="block text-sm font-medium text-gray-700 mb-1">
+              Description <span class="text-gray-400 font-normal">(Optional)</span>
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              rows="3"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              placeholder="Brief summary or description of the event..."
+            ></textarea>
+          </div>
+
+          <!-- Photograph / Poster Upload -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Event Poster / Photograph
+            </label>
+            <input type="hidden" id="imageUrl" name="imageUrl" />
+
+            <div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+              <div class="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-white flex items-center justify-center">
+                <img
+                  id="imagePreview"
+                  src=""
+                  alt="Event Preview"
+                  class="h-full w-full object-contain hidden"
+                />
+                <span id="imagePlaceholder" class="text-3xl text-gray-300">🖼️</span>
+              </div>
+
+              <div class="flex-1 space-y-2 min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    id="eventFileInput"
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                    class="hidden"
+                  />
+                  <button
+                    type="button"
+                    id="selectEventPhotoBtn"
+                    class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 transition"
+                  >
+                    Select Image
+                  </button>
+                  <button
+                    type="button"
+                    id="removeEventPhotoBtn"
+                    class="rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition hidden"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div id="photoStatusText" class="text-xs text-gray-500">
+                  JPG, JPEG, PNG, or WebP (max 5MB)
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Publish Status Toggle -->
+          <div class="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="isPublished"
+              name="isPublished"
+              class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              checked
+            />
+            <label for="isPublished" class="text-sm font-medium text-gray-700 cursor-pointer">
+              Publish event on college home page
+            </label>
+          </div>
+
+          <div id="formError" class="text-xs text-red-600 font-medium hidden"></div>
+
+          <!-- Buttons -->
+          <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              id="cancelBtn"
+              class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              id="submitBtn"
+              class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm flex items-center gap-2"
+            >
+              <span>Save Event</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  let events: any[] = [];
+  let isEditing = false;
+  let isUploading = false;
+
+  const loadingState = document.getElementById("loadingState");
+  const emptyState = document.getElementById("emptyState");
+  const eventsGrid = document.getElementById("eventsGrid");
+  const modal = document.getElementById("eventModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const form = document.getElementById("eventForm") as HTMLFormElement;
+  const formError = document.getElementById("formError");
+  const alertContainer = document.getElementById("alertContainer");
+  const submitBtn = document.getElementById("submitBtn") as HTMLButtonElement;
+
+  const eventFileInput = document.getElementById("eventFileInput") as HTMLInputElement;
+  const selectEventPhotoBtn = document.getElementById("selectEventPhotoBtn");
+  const removeEventPhotoBtn = document.getElementById("removeEventPhotoBtn");
+  const imagePreview = document.getElementById("imagePreview") as HTMLImageElement;
+  const imagePlaceholder = document.getElementById("imagePlaceholder");
+  const imageUrlInput = document.getElementById("imageUrl") as HTMLInputElement;
+  const photoStatusText = document.getElementById("photoStatusText");
+
+  function showAlert(msg: string, type: "success" | "error") {
+    if (!alertContainer) return;
+    alertContainer.textContent = msg;
+    alertContainer.className = `rounded-lg p-4 text-sm font-medium ${
+      type === "success"
+        ? "bg-green-50 text-green-800 border border-green-200"
+        : "bg-red-50 text-red-800 border border-red-200"
+    }`;
+    alertContainer.classList.remove("hidden");
+    setTimeout(() => {
+      alertContainer.classList.add("hidden");
+    }, 5000);
+  }
+
+  async function loadEvents() {
+    try {
+      if (loadingState) loadingState.classList.remove("hidden");
+      if (emptyState) emptyState.classList.add("hidden");
+      if (eventsGrid) eventsGrid.classList.add("hidden");
+
+      // Load all events including drafts for admin view
+      const res = await fetch("/api/events?all=true", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load events");
+      events = await res.json();
+      renderEvents();
+    } catch (err: any) {
+      console.error(err);
+      showAlert(err.message || "Failed to load events", "error");
+    } finally {
+      if (loadingState) loadingState.classList.add("hidden");
+    }
+  }
+
+  function renderEvents() {
+    if (!eventsGrid || !emptyState) return;
+
+    if (!events || events.length === 0) {
+      emptyState.classList.remove("hidden");
+      eventsGrid.classList.add("hidden");
+      return;
+    }
+
+    emptyState.classList.add("hidden");
+    eventsGrid.classList.remove("hidden");
+    eventsGrid.innerHTML = "";
+
+    events.forEach((ev) => {
+      const card = document.createElement("div");
+      card.className =
+        "bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition flex flex-col";
+
+      card.innerHTML = `
+        <div class="relative w-full h-52 bg-slate-900 flex items-center justify-center overflow-hidden">
+          ${
+            ev.imageUrl
+              ? `
+              <img src="${ev.imageUrl}" alt="" class="absolute inset-0 w-full h-full object-cover blur-xl opacity-40 select-none pointer-events-none" />
+              <img src="${ev.imageUrl}" alt="${ev.title}" class="relative z-10 max-h-full max-w-full object-contain mx-auto" />
+            `
+              : `<span class="text-4xl text-gray-500">🎉</span>`
+          }
+          <div class="absolute top-3 right-3 z-20">
+            <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${
+              ev.isPublished
+                ? "bg-green-100 text-green-800 border border-green-200"
+                : "bg-amber-100 text-amber-800 border border-amber-200"
+            }">
+              ${ev.isPublished ? "Published" : "Draft (Hidden)"}
+            </span>
+          </div>
+        </div>
+        <div class="p-5 flex flex-col flex-grow justify-between">
+          <div>
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-gray-900 text-lg leading-snug">${ev.title}</h3>
+              ${
+                ev.eventType
+                  ? `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap">${ev.eventType}</span>`
+                  : ""
+              }
+            </div>
+            ${ev.eventDate ? `<p class="text-xs text-indigo-600 font-medium mt-1 flex items-center gap-1">📅 ${ev.eventDate}</p>` : ""}
+            ${ev.description ? `<p class="text-xs text-gray-600 mt-2 line-clamp-2">${ev.description}</p>` : ""}
+          </div>
+          <div class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+            <button
+              class="toggle-btn text-xs font-medium ${
+                ev.isPublished ? "text-amber-600 hover:text-amber-700" : "text-green-600 hover:text-green-700"
+              }"
+              data-id="${ev.id}"
+              data-published="${ev.isPublished}"
+            >
+              ${ev.isPublished ? "Unpublish" : "Publish to Home Page"}
+            </button>
+            <div class="flex items-center gap-1.5">
+              <button
+                class="edit-btn px-2.5 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition"
+                data-id="${ev.id}"
+              >
+                Edit
+              </button>
+              <button
+                class="delete-btn px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition"
+                data-id="${ev.id}"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      card.querySelector(".edit-btn")?.addEventListener("click", () => openEditModal(ev.id));
+      card.querySelector(".delete-btn")?.addEventListener("click", () => deleteEvent(ev.id));
+      card.querySelector(".toggle-btn")?.addEventListener("click", () => togglePublish(ev.id, !ev.isPublished));
+
+      eventsGrid.appendChild(card);
+    });
+  }
+
+  function openAddModal() {
+    isEditing = false;
+    form.reset();
+    (document.getElementById("eventId") as HTMLInputElement).value = "";
+    (document.getElementById("isPublished") as HTMLInputElement).checked = true;
+    if (modalTitle) modalTitle.textContent = "Add Home Page Event";
+    if (formError) formError.classList.add("hidden");
+    resetPhotoPreview();
+    modal?.classList.remove("hidden");
+  }
+
+  function openEditModal(id: string) {
+    const ev = events.find((item) => item.id === id);
+    if (!ev) return;
+
+    isEditing = true;
+    (document.getElementById("eventId") as HTMLInputElement).value = ev.id;
+    (document.getElementById("eventTitle") as HTMLInputElement).value = ev.title;
+    (document.getElementById("eventDate") as HTMLInputElement).value = ev.eventDate || "";
+    (document.getElementById("eventType") as HTMLInputElement).value = ev.eventType || "";
+    (document.getElementById("description") as HTMLTextAreaElement).value = ev.description || "";
+    (document.getElementById("isPublished") as HTMLInputElement).checked = Boolean(ev.isPublished);
+
+    if (modalTitle) modalTitle.textContent = "Edit Home Page Event";
+    if (formError) formError.classList.add("hidden");
+
+    if (ev.imageUrl) {
+      setPhotoPreview(ev.imageUrl);
+    } else {
+      resetPhotoPreview();
+    }
+
+    modal?.classList.remove("hidden");
+  }
+
+  function closeModal() {
+    modal?.classList.add("hidden");
+  }
+
+  function setPhotoPreview(url: string) {
+    if (imageUrlInput) imageUrlInput.value = url;
+    if (imagePreview) {
+      imagePreview.src = url;
+      imagePreview.classList.remove("hidden");
+    }
+    if (imagePlaceholder) imagePlaceholder.classList.add("hidden");
+    if (removeEventPhotoBtn) removeEventPhotoBtn.classList.remove("hidden");
+    if (photoStatusText) photoStatusText.textContent = "Image uploaded successfully";
+  }
+
+  function resetPhotoPreview() {
+    if (imageUrlInput) imageUrlInput.value = "";
+    if (imagePreview) {
+      imagePreview.src = "";
+      imagePreview.classList.add("hidden");
+    }
+    if (imagePlaceholder) imagePlaceholder.classList.remove("hidden");
+    if (removeEventPhotoBtn) removeEventPhotoBtn.classList.add("hidden");
+    if (eventFileInput) eventFileInput.value = "";
+    if (photoStatusText) photoStatusText.textContent = "JPG, JPEG, PNG, or WebP (max 5MB)";
+  }
+
+  // Upload handler for event poster
+  eventFileInput?.addEventListener("change", async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size exceeds 5MB limit.");
+      eventFileInput.value = "";
+      return;
+    }
+
+    try {
+      isUploading = true;
+      if (photoStatusText) photoStatusText.textContent = "Uploading image...";
+      if (selectEventPhotoBtn) selectEventPhotoBtn.setAttribute("disabled", "true");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/events/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Upload failed");
+
+      setPhotoPreview(result.url);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to upload event image");
+      resetPhotoPreview();
+    } finally {
+      isUploading = false;
+      if (selectEventPhotoBtn) selectEventPhotoBtn.removeAttribute("disabled");
+    }
+  });
+
+  selectEventPhotoBtn?.addEventListener("click", () => eventFileInput?.click());
+  removeEventPhotoBtn?.addEventListener("click", resetPhotoPreview);
+
+  // Form submit handler
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (isUploading) {
+      alert("Please wait for the image upload to complete.");
+      return;
+    }
+
+    const id = (document.getElementById("eventId") as HTMLInputElement).value;
+    const title = (document.getElementById("eventTitle") as HTMLInputElement).value.trim();
+    const eventDate = (document.getElementById("eventDate") as HTMLInputElement).value.trim();
+    const eventType = (document.getElementById("eventType") as HTMLInputElement).value.trim();
+    const description = (document.getElementById("description") as HTMLTextAreaElement).value.trim();
+    const isPublished = (document.getElementById("isPublished") as HTMLInputElement).checked;
+    const imageUrl = imageUrlInput.value.trim();
+
+    if (!title) {
+      if (formError) {
+        formError.textContent = "Event Title is required.";
+        formError.classList.remove("hidden");
+      }
+      return;
+    }
+
+    try {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving...";
+
+      const url = isEditing ? `/api/events/${id}` : "/api/events";
+      const method = isEditing ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          eventDate,
+          eventType,
+          description,
+          isPublished,
+          imageUrl,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to save event");
+
+      closeModal();
+      showAlert(isEditing ? "Event updated successfully" : "Event created successfully", "success");
+      loadEvents();
+    } catch (err: any) {
+      console.error(err);
+      if (formError) {
+        formError.textContent = err.message || "Failed to save event";
+        formError.classList.remove("hidden");
+      }
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Save Event";
+    }
+  });
+
+  async function togglePublish(id: string, newStatus: boolean) {
+    const ev = events.find((item) => item.id === id);
+    if (!ev) return;
+
+    try {
+      const res = await fetch(`/api/events/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...ev,
+          isPublished: newStatus,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to update event status");
+
+      showAlert(newStatus ? "Event published to home page" : "Event unpublished from home page", "success");
+      loadEvents();
+    } catch (err: any) {
+      console.error(err);
+      showAlert(err.message || "Failed to update status", "error");
+    }
+  }
+
+  async function deleteEvent(id: string) {
+    if (!confirm("Are you sure you want to delete this event?")) return;
+
+    try {
+      const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to delete event");
+
+      showAlert("Event deleted successfully", "success");
+      loadEvents();
+    } catch (err: any) {
+      console.error(err);
+      showAlert(err.message || "Failed to delete event", "error");
+    }
+  }
+
+  document.getElementById("addEventBtn")?.addEventListener("click", openAddModal);
+  document.getElementById("emptyAddBtn")?.addEventListener("click", openAddModal);
+  document.getElementById("closeModalBtn")?.addEventListener("click", closeModal);
+  document.getElementById("cancelBtn")?.addEventListener("click", closeModal);
+
+  // Load on start
+  loadEvents();
+</script>

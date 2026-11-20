@@ -121,6 +121,8 @@ export const supabase = new Proxy({} as any, {
 
 export const GALLERY_BUCKET = "gallery-images";
 export const DOCUMENTS_BUCKET = "academic-documents";
+export const PLACEMENTS_BUCKET = "placements";
+export const EVENTS_BUCKET = "Events";
 
 export async function initializeStorageBucket() {
   try {
@@ -423,4 +425,96 @@ export async function deleteDocument(filePath: string): Promise<void> {
 export function extractFilePathFromUrl(url: string): string {
   const urlParts = url.split("/");
   return urlParts[urlParts.length - 1];
+}
+
+export async function uploadPlacementImage(
+  file: File,
+  fileName: string
+): Promise<string> {
+  try {
+    if (file.size > MAX_IMAGE_SIZE) {
+      throw new Error(`File size exceeds maximum allowed image limit of ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`);
+    }
+
+    const validation = await validateFileSignatureAndMime(file, ["jpeg", "png", "webp"]);
+    if (!validation.valid) {
+      throw new Error(validation.error || "Invalid image file format");
+    }
+
+    const claimedExt = extractSanitizedExtension(fileName);
+    const validImageExtensions = ["jpg", "jpeg", "png", "webp"];
+    if (!validImageExtensions.includes(claimedExt)) {
+      throw new Error(`File extension '.${claimedExt}' is not permitted for student photos`);
+    }
+
+    const safeExt = validation.detectedExt;
+    const filePath = `placement-${Date.now()}-${crypto.randomUUID()}.${safeExt}`;
+
+    const { data, error } = await supabaseAdmin.storage
+      .from(PLACEMENTS_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: validation.detectedMime,
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    const { data: urlData } = supabaseAdmin.storage
+      .from(PLACEMENTS_BUCKET)
+      .getPublicUrl(data.path);
+
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error("Error uploading placement image:", error);
+    throw error;
+  }
+}
+
+export async function uploadEventImage(
+  file: File,
+  fileName: string
+): Promise<string> {
+  try {
+    if (file.size > MAX_IMAGE_SIZE) {
+      throw new Error(`File size exceeds maximum allowed image limit of ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`);
+    }
+
+    const validation = await validateFileSignatureAndMime(file, ["jpeg", "png", "webp"]);
+    if (!validation.valid) {
+      throw new Error(validation.error || "Invalid image file format");
+    }
+
+    const claimedExt = extractSanitizedExtension(fileName);
+    const validImageExtensions = ["jpg", "jpeg", "png", "webp"];
+    if (!validImageExtensions.includes(claimedExt)) {
+      throw new Error(`File extension '.${claimedExt}' is not permitted for event images`);
+    }
+
+    const safeExt = validation.detectedExt;
+    const filePath = `event-${Date.now()}-${crypto.randomUUID()}.${safeExt}`;
+
+    const { data, error } = await supabaseAdmin.storage
+      .from(EVENTS_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: validation.detectedMime,
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    const { data: urlData } = supabaseAdmin.storage
+      .from(EVENTS_BUCKET)
+      .getPublicUrl(data.path);
+
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error("Error uploading event image:", error);
+    throw error;
+  }
 }

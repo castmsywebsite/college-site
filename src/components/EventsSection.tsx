@@ -1,29 +1,66 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Calendar, Users } from "lucide-react";
 
+interface EventItem {
+  title: string;
+  date: string;
+  description: string;
+  image: string;
+  participants: string;
+  type: string;
+}
+
+const initialEvents: EventItem[] = [
+  {
+    title: "Best NSS Award 2024",
+    date: "March 15-17, 2024",
+    description:
+      "Three-day national conference featuring research presentations, keynote speeches, and networking sessions.",
+    image:
+      "https://grvnijrdyyevvtlcssoo.supabase.co/storage/v1/object/public/Events/WhatsApp%20Image%202025-10-11%20at%2021.52.13_3c6c115f.jpg",
+    participants: "",
+    type: "",
+  },
+  {
+    title: "Freshers Day celebration -- Coming Soon...",
+    date: "December 4th 2025",
+    description: "",
+    image:
+      "https://grvnijrdyyevvtlcssoo.supabase.co/storage/v1/object/public/Events/WhatsApp%20Image%202025-11-26%20at%2020.11.32_5a803d6c.jpg",
+    participants: "",
+    type: "Cultural",
+  },
+];
+
 const EventsSection: React.FC = () => {
-  const events = [
-    {
-      title: "Best NSS Award 2024",
-      date: "March 15-17, 2024",
-      description:
-        "Three-day national conference featuring research presentations, keynote speeches, and networking sessions.",
-      image:
-        "https://grvnijrdyyevvtlcssoo.supabase.co/storage/v1/object/public/Events/WhatsApp%20Image%202025-10-11%20at%2021.52.13_3c6c115f.jpg",
-      participants: "",
-      type: "",
-    },
-    {
-      title: "Freshers Day celebration -- Coming Soon...",
-      date: "December 4th 2025",
-      description:
-        "",
-      image:
-        "https://grvnijrdyyevvtlcssoo.supabase.co/storage/v1/object/public/Events/WhatsApp%20Image%202025-11-26%20at%2020.11.32_5a803d6c.jpg",
-      participants: "",
-      type: "Cultural",
-    },
-  ];
+  const [events, setEvents] = useState<EventItem[]>(initialEvents);
+
+  // Fetch live published events dynamically from database API
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/events")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setEvents(
+            data.map((item: any) => ({
+              title: item.title,
+              date: item.eventDate || item.date || "",
+              description: item.description || "",
+              image: item.imageUrl || item.image || "",
+              participants: item.participants || "",
+              type: item.eventType || item.type || "",
+            }))
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn("Using default event records:", err?.message);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="bg-white py-16">
@@ -39,18 +76,20 @@ const EventsSection: React.FC = () => {
               >
                 <div className="relative w-full h-64 sm:h-72 md:h-80 lg:h-96 overflow-hidden bg-slate-900 flex items-center justify-center">
                   {/* Ambient Blurred Backdrop to gracefully fill any card aspect ratio */}
-                  <img
-                    src={event.image}
-                    alt=""
-                    aria-hidden="true"
-                    className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-40 select-none pointer-events-none"
-                    loading="lazy"
-                  />
+                  {event.image && (
+                    <img
+                      src={event.image}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-40 select-none pointer-events-none"
+                      loading="lazy"
+                    />
+                  )}
                   <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[1px]" />
 
                   {/* Main Foreground Image - Fully preserved with object-contain, never cropped */}
                   <img
-                    src={event.image}
+                    src={event.image || "/favicon.svg"}
                     alt={event.title}
                     className="relative z-10 max-h-full max-w-full w-auto h-auto object-contain mx-auto transition-transform duration-500 hover:scale-[1.02]"
                     loading="lazy"
