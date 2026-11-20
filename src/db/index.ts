@@ -17,6 +17,8 @@ export const dbAsyncLocalStorage = new AsyncLocalStorage<RequestDatabaseContext>
 export function getDbUrl(runtimeEnv?: Record<string, any>): string {
   let url =
     runtimeEnv?.DB_URL ||
+    (typeof globalThis !== "undefined" && (globalThis as any)?.__env__?.DB_URL) ||
+    (typeof globalThis !== "undefined" && (globalThis as any)?.DB_URL) ||
     (typeof process !== "undefined" && process.env?.DB_URL ? process.env.DB_URL : undefined) ||
     (typeof import.meta !== "undefined" && import.meta.env?.DB_URL ? import.meta.env.DB_URL : undefined);
 
@@ -36,14 +38,23 @@ export function getDbUrl(runtimeEnv?: Record<string, any>): string {
 }
 
 // Create a Postgres client configured specifically for serverless edge workers and Supabase transaction pooler
-export function createPostgresClient(connectionUrl?: string) {
-  const url = connectionUrl || getDbUrl();
+export function createPostgresClient(connectionUrl?: string, runtimeEnv?: Record<string, any>) {
+  const url = connectionUrl || getDbUrl(runtimeEnv);
   return postgres(url, {
     prepare: false, // MANDATORY for Supabase transaction pooler (port 6543)
     ssl: "require", // MANDATORY for Cloudflare Workers -> Supabase TCP/TLS handshake
-    max: 5, // Support up to 5 concurrent queries per request isolate (e.g. Promise.all)
-    idle_timeout: 15, // Cleanly close idle sockets after 15s
+    max: 1, // MANDATORY: exactly 1 connection per serverless isolate (never > 1 on edge workers)
+    fetch_types: false, // MANDATORY: disable automatic type catalog queries to prevent subrequest exhaustion
+    idle_timeout: 20, // Cleanly close idle sockets after 20s
     connect_timeout: 10, // 10s connection timeout
+    max_lifetime: 60 * 15, // 15 minutes max lifetime
+    backoff: (retries: number) => {
+      // CRITICAL: Prevent runaway reconnect loop that exhausts Cloudflare Workers subrequest limit (50 subrequests)
+      if (retries >= 2) {
+        throw new Error(`Database connection failed after ${retries} attempts`);
+      }
+      return 0.5;
+    },
   });
 }
 
@@ -53,7 +64,7 @@ let fallbackDb: DrizzleDatabase | null = null;
 
 function getFallbackDb(runtimeEnv?: Record<string, any>): DrizzleDatabase {
   if (!fallbackClient || !fallbackDb) {
-    fallbackClient = createPostgresClient(getDbUrl(runtimeEnv));
+    fallbackClient = createPostgresClient(getDbUrl(runtimeEnv), runtimeEnv);
     fallbackDb = drizzle(fallbackClient);
   }
   return fallbackDb;
@@ -62,7 +73,7 @@ function getFallbackDb(runtimeEnv?: Record<string, any>): DrizzleDatabase {
 // Create a fresh request-scoped database context for a request lifecycle
 export function createRequestDb(runtimeEnv?: Record<string, any>): RequestDatabaseContext {
   const url = getDbUrl(runtimeEnv);
-  const client = createPostgresClient(url);
+  const client = createPostgresClient(url, runtimeEnv);
   const db = drizzle(client);
   return { db, client, runtimeEnv };
 }
@@ -124,6 +135,8 @@ export function isConnectionError(error: any): boolean {
     msg.includes("econnreset") ||
     msg.includes("broken pipe") ||
     msg.includes("cannot perform i/o") ||
+    msg.includes("connection failed after") ||
+    msg.includes("subrequests") ||
     code === "57p01" || // ADMIN SHUTDOWN
     code === "08006" || // CONNECTION FAILURE
     code === "08001" || // SQLCLIENT UNABLE TO ESTABLISH SQLCONNECTION
@@ -136,17 +149,27 @@ export function isConnectionError(error: any): boolean {
 // Never automatically retries mutations (INSERT, UPDATE, DELETE) to prevent duplicates.
 export async function withDbRetry<T>(
   operation: (database: DrizzleDatabase) => Promise<T>,
-  runtimeEnv?: Record<string, any>,
+  runtimeEnvOrDb?: Record<string, any> | DrizzleDatabase,
   isIdempotent: boolean = true
 ): Promise<T> {
-  const activeDb = getDb(runtimeEnv);
+  let activeDb: DrizzleDatabase;
+  let runtimeEnv: Record<string, any> | undefined;
+
+  if (runtimeEnvOrDb && typeof (runtimeEnvOrDb as any).select === "function") {
+    activeDb = runtimeEnvOrDb as DrizzleDatabase;
+  } else {
+    runtimeEnv = runtimeEnvOrDb as Record<string, any> | undefined;
+    activeDb = getDb(runtimeEnv);
+  }
+
   try {
     return await operation(activeDb);
   } catch (err: any) {
     if (isIdempotent && isConnectionError(err)) {
-      console.warn("Idempotent DB query hit dropped connection. Retrying once...", err.message);
+      console.warn("Idempotent DB query hit dropped connection. Resetting client and retrying once...", err.message);
       await new Promise(res => setTimeout(res, 50));
-      return await operation(activeDb);
+      const freshDb = resetDbClient(runtimeEnv);
+      return await operation(freshDb);
     }
     throw err;
   }

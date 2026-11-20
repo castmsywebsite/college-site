@@ -5,6 +5,8 @@ export const getEnv = (key: string): string => {
   const runtimeEnv = dbAsyncLocalStorage.getStore()?.runtimeEnv;
   return (
     runtimeEnv?.[key] ||
+    (typeof globalThis !== "undefined" && (globalThis as any)?.__env__?.[key]) ||
+    (typeof globalThis !== "undefined" && (globalThis as any)?.[key]) ||
     (typeof process !== "undefined" && process.env?.[key]) ||
     (typeof import.meta !== "undefined" && import.meta.env?.[key]) ||
     ""

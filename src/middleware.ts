@@ -3,7 +3,11 @@ import { Auth } from "./lib/auth";
 import { getDb, createRequestDb, dbAsyncLocalStorage, type RequestDatabaseContext } from "./db";
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  const runtimeEnv = (context.locals as any)?.runtime?.env;
+  const runtimeEnv =
+    (context.locals as any)?.runtime?.env ||
+    (context as any)?.env ||
+    (globalThis as any)?.__env__ ||
+    (typeof process !== "undefined" ? process.env : undefined);
   const cfCtx = (context.locals as any)?.runtime?.ctx;
 
   let reqContext: RequestDatabaseContext | null = null;
