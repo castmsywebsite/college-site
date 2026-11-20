@@ -9,6 +9,13 @@ interface Student {
   image: string;
 }
 
+const getInitials = (name: string): string => {
+  if (!name) return "🎓";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 const initialStudents: Student[] = [
   {
     name: "Neeraj",
@@ -195,59 +202,72 @@ const StudentPlacementsCarousel: React.FC = () => {
                     {slide.map((student, slideIndex) => (
                       <div
                         key={slideIndex}
-                        className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full group"
+                        className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full group"
                       >
-                        {/* Photograph Container - Uses object-contain with neutral ambient backdrop */}
-                        <div className="relative w-full h-60 sm:h-64 bg-slate-100 flex items-center justify-center p-3 overflow-hidden">
-                          {/* Ambient soft backdrop to fill card frame seamlessly */}
-                          {student.image && (
-                            <img
-                              src={student.image}
-                              alt=""
-                              aria-hidden="true"
-                              className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-25 select-none pointer-events-none"
-                              loading="lazy"
-                            />
+                        {/* Photograph Container - Standard Studio Portrait Frame with Ambient Palette */}
+                        <div className="relative w-full aspect-[4/5] sm:aspect-[3/4] max-h-80 bg-slate-100 flex items-center justify-center p-3.5 sm:p-4 overflow-hidden border-b border-slate-100">
+                          {student.image ? (
+                            <>
+                              {/* Ambient background glow derived from student photo */}
+                              <img
+                                src={student.image}
+                                alt=""
+                                aria-hidden="true"
+                                className="absolute inset-0 w-full h-full object-cover blur-2xl scale-125 opacity-40 brightness-95 select-none pointer-events-none"
+                                loading="lazy"
+                              />
+                              <div className="absolute inset-0 bg-white/30 backdrop-blur-sm pointer-events-none" />
+                              {/* Crisp foreground student photo with subtle studio border */}
+                              <img
+                                src={student.image}
+                                alt={student.name}
+                                className="relative z-10 max-h-full max-w-full w-auto h-auto object-contain rounded-xl shadow-md border border-white/80 transition-transform duration-300 group-hover:scale-[1.03]"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = "none";
+                                }}
+                              />
+                            </>
+                          ) : (
+                            <>
+                              {/* Institutional Monogram Backdrop for Students without photo */}
+                              <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-indigo-50/50 to-slate-100" />
+                              <div className="relative z-10 flex flex-col items-center justify-center gap-2">
+                                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 text-white font-bold text-2xl sm:text-3xl shadow-lg ring-4 ring-white flex items-center justify-center tracking-wider">
+                                  {getInitials(student.name)}
+                                </div>
+                                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                                  CAS TMSY Alumni
+                                </span>
+                              </div>
+                            </>
                           )}
-                          <img
-                            src={
-                              student.image ||
-                              `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                student.name
-                              )}&background=random`
-                            }
-                            alt={student.name}
-                            className="relative z-10 max-h-full max-w-full w-auto h-auto object-contain mx-auto transition-transform duration-300 group-hover:scale-105"
-                            loading="lazy"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                student.name
-                              )}&background=random`;
-                            }}
-                          />
                         </div>
 
-                        {/* Placement Information - Positioned below photograph to prevent overlapping faces */}
-                        <div className="p-4 sm:p-5 flex flex-col flex-grow justify-between bg-white border-t border-gray-100">
+                        {/* Placement Information Card Details */}
+                        <div className="p-4 sm:p-5 flex flex-col flex-grow justify-between bg-white">
                           <div>
-                            <h4 className="text-base sm:text-lg font-bold text-gray-900 leading-snug">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
+                                Placed
+                              </span>
+                              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                                Batch {student.year}
+                              </span>
+                            </div>
+                            <h4 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
                               {student.name}
                             </h4>
                             {student.position && (
-                              <p className="text-xs sm:text-sm text-gray-500 mt-0.5 line-clamp-1">
+                              <p className="text-xs sm:text-sm text-slate-500 mt-0.5 line-clamp-1">
                                 {student.position}
                               </p>
                             )}
-                            <p className="text-sm font-semibold text-blue-600 mt-1 line-clamp-1">
+                            <p className="text-sm font-semibold text-blue-700 mt-1.5 line-clamp-1 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 inline-block shrink-0"></span>
                               {student.company}
                             </p>
-                          </div>
-                          <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between text-xs text-gray-500">
-                            <span className="font-medium text-gray-400">Graduated:</span>
-                            <span className="font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
-                              {student.year}
-                            </span>
                           </div>
                         </div>
                       </div>
