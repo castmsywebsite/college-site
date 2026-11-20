@@ -21,6 +21,8 @@ export const GET: APIRoute = async ({ locals }) => {
       version: "hyperdrive-ready",
       hasHyperdrive: Boolean(hyperdrive),
       hasDbUrl: Boolean(dbUrl),
+      hasSupabaseUrl: Boolean(runtimeEnv?.SUPABASE_URL || (globalThis as any)?.__env__?.SUPABASE_URL || process.env?.SUPABASE_URL),
+      hasSupabaseKey: Boolean(runtimeEnv?.SUPABASE_SERVICE_ROLE_KEY || runtimeEnv?.SUPABASE_ANON_KEY || (globalThis as any)?.__env__?.SUPABASE_SERVICE_ROLE_KEY || (globalThis as any)?.__env__?.SUPABASE_ANON_KEY || process.env?.SUPABASE_SERVICE_ROLE_KEY || process.env?.SUPABASE_ANON_KEY),
       dbHost: host,
       timestamp: new Date().toISOString(),
     }),

@@ -10,20 +10,45 @@ export const GET: APIRoute = async ({ request, locals }) => {
     const category = url.searchParams.get("category");
     const runtimeEnv = (locals as any)?.runtime?.env;
 
-    const images = await withDbRetry(async (database) => {
+    let images: any[] = [];
+    try {
+      images = await withDbRetry(async (database) => {
+        if (category && category !== "all") {
+          return await database
+            .select()
+            .from(galleryImages)
+            .where(eq(galleryImages.category, category))
+            .orderBy(galleryImages.createdAt);
+        } else {
+          return await database
+            .select()
+            .from(galleryImages)
+            .orderBy(galleryImages.createdAt);
+        }
+      }, (locals as any)?.db || runtimeEnv);
+    } catch (dbError: any) {
+      console.warn("Gallery Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+      const { supabaseAdmin, supabase } = await import("../../../lib/supabase");
+      const client = supabaseAdmin || supabase;
+      let query = client.from("gallery_images").select("*").order("created_at", { ascending: true });
       if (category && category !== "all") {
-        return await database
-          .select()
-          .from(galleryImages)
-          .where(eq(galleryImages.category, category))
-          .orderBy(galleryImages.createdAt);
-      } else {
-        return await database
-          .select()
-          .from(galleryImages)
-          .orderBy(galleryImages.createdAt);
+        query = query.eq("category", category);
       }
-    }, runtimeEnv);
+      const { data, error } = await query;
+      if (error) throw error;
+      images = (data || []).map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        category: row.category,
+        imageUrl: row.image_url,
+        fileName: row.file_name,
+        fileSize: row.file_size,
+        mimeType: row.mime_type,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+    }
 
     return new Response(JSON.stringify(images), {
       status: 200,

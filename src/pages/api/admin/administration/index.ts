@@ -13,19 +13,49 @@ import {
 export const GET: APIRoute = async (ctx) => {
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    const rows = await withDbRetry(async (db) => {
-      return await db
-        .select({
-          staff: staffTable,
-          departmentName: departmentsTable.name,
-        })
-        .from(staffTable)
-        .leftJoin(
-          departmentsTable,
-          eq(staffTable.departmentId, departmentsTable.id)
-        )
-        .orderBy(asc(staffTable.displayOrder));
-    }, runtimeEnv);
+    let rows: any[] = [];
+    try {
+      rows = await withDbRetry(async (db) => {
+        return await db
+          .select({
+            staff: staffTable,
+            departmentName: departmentsTable.name,
+          })
+          .from(staffTable)
+          .leftJoin(
+            departmentsTable,
+            eq(staffTable.departmentId, departmentsTable.id)
+          )
+          .orderBy(asc(staffTable.displayOrder));
+      }, (ctx.locals as any)?.db || runtimeEnv);
+    } catch (dbError: any) {
+      console.warn("Administration Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+      const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client
+        .from("staff")
+        .select("*, departments(name)")
+        .order("display_order", { ascending: true });
+      if (error) throw error;
+      rows = (data || []).map((s: any) => ({
+        staff: {
+          id: s.id,
+          name: s.name,
+          category: s.category,
+          designation: s.designation,
+          departmentId: s.department_id,
+          email: s.email,
+          phone: s.phone,
+          qualification: s.qualification,
+          photoUrl: s.photo_url,
+          displayOrder: s.display_order,
+          roles: s.roles,
+          createdAt: s.created_at,
+          updatedAt: s.updated_at,
+        },
+        departmentName: s.departments?.name || null,
+      }));
+    }
 
     const result = rows.map((row) => {
       let canonicalDept = getCanonicalDepartment(row.departmentName);

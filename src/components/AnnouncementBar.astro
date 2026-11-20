@@ -2,11 +2,36 @@
 import { announcementsTable } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 const { db } = Astro.locals;
-const announcements = await db
-  .select()
-  .from(announcementsTable)
-  .where(eq(announcementsTable.active, true))
-  .orderBy(desc(announcementsTable.createdAt));
+
+let announcements: any[] = [];
+try {
+  if (db) {
+    announcements = await db
+      .select()
+      .from(announcementsTable)
+      .where(eq(announcementsTable.active, true))
+      .orderBy(desc(announcementsTable.createdAt));
+  }
+} catch (err: any) {
+  console.warn("AnnouncementBar DB query failed, falling back to Supabase REST:", err?.message);
+}
+
+if (!announcements || announcements.length === 0) {
+  try {
+    const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+    const client = supabaseAdmin || supabase;
+    const { data } = await client
+      .from("announcements")
+      .select("*")
+      .eq("active", true)
+      .order("created_at", { ascending: false });
+    if (data && data.length > 0) {
+      announcements = data;
+    }
+  } catch (restErr) {
+    console.warn("AnnouncementBar REST fallback error:", restErr);
+  }
+}
 
 const renderText = (text: string, highlight?: string | null) => {
   if (!highlight || !text.toLowerCase().includes(highlight.toLowerCase())) {

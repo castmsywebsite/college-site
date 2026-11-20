@@ -8,12 +8,39 @@ import { withDbRetry } from "@/db";
 export const GET: APIRoute = async (ctx) => {
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    const attendance = await withDbRetry(async (db) => {
-      return await db
-        .select()
-        .from(attendanceTable)
-        .orderBy(desc(attendanceTable.date));
-    }, runtimeEnv);
+    let attendance: any[] = [];
+    try {
+      attendance = await withDbRetry(async (db) => {
+        return await db
+          .select()
+          .from(attendanceTable)
+          .orderBy(desc(attendanceTable.date));
+      }, (ctx.locals as any)?.db || runtimeEnv);
+    } catch (dbError: any) {
+      console.warn("Attendance Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+      const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client
+        .from("attendance")
+        .select("*")
+        .order("date", { ascending: false });
+      if (error) throw error;
+      attendance = (data || []).map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        date: row.date,
+        programId: row.program_id,
+        semester: row.semester,
+        academicYear: row.academic_year,
+        fileUrl: row.file_url,
+        fileName: row.file_name,
+        fileSize: row.file_size,
+        mimeType: row.mime_type,
+        uploadedBy: row.uploaded_by,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+    }
 
     return new Response(JSON.stringify(attendance), {
       status: 200,

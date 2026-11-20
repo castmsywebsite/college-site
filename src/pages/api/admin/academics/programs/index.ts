@@ -6,9 +6,28 @@ import { validateSameOrigin } from "@/lib/api-auth";
 export const GET: APIRoute = async (ctx) => {
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    const rows = await withDbRetry(async (db) => {
-      return await db.select().from(programsTable);
-    }, runtimeEnv);
+    let rows: any[] = [];
+    try {
+      rows = await withDbRetry(async (db) => {
+        return await db.select().from(programsTable);
+      }, (ctx.locals as any)?.db || runtimeEnv);
+    } catch (dbError: any) {
+      console.warn("Programs Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+      const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client.from("programs").select("*");
+      if (error) throw error;
+      rows = (data || []).map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        code: row.code,
+        departmentId: row.department_id,
+        durationYears: row.duration_years,
+        type: row.type,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+    }
 
     return new Response(JSON.stringify(rows), {
       headers: { "Content-Type": "application/json" },
