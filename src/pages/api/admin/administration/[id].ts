@@ -9,6 +9,7 @@ import {
   validateStaffCategoryAndDepartment,
   resolveDepartmentId,
 } from "@/lib/departments";
+import { shouldUseSupabaseRest, supabaseAdmin, supabase } from "@/lib/supabase";
 
 export const GET: APIRoute = async (ctx) => {
   const user = ctx.locals.user;
