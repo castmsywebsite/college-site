@@ -112,7 +112,7 @@ export const POST: APIRoute = async (ctx) => {
       } as const;
 
       await db.insert(staffTable).values(values);
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify({ id, success: true }), {
       status: 201,

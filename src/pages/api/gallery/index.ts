@@ -99,7 +99,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         })
         .returning();
       return inserted;
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify(newImage), {
       status: 201,

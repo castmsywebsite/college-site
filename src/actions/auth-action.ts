@@ -118,7 +118,7 @@ export const authActions = {
             username: input.name,
             password_hash: hashedPassword,
           });
-        }, runtimeEnv);
+        }, runtimeEnv, false);
 
         // Legitimate administrative user creation: do NOT overwrite current admin's session
         return {

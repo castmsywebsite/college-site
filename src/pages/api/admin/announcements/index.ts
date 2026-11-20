@@ -63,7 +63,7 @@ export const POST: APIRoute = async (ctx) => {
                     active: active !== undefined ? active : true,
                 })
                 .returning();
-        }, runtimeEnv);
+        }, runtimeEnv, false);
 
         return new Response(JSON.stringify(newAnnouncement[0]), {
             status: 201,

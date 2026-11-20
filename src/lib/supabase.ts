@@ -1,31 +1,68 @@
 import { createClient } from "@supabase/supabase-js";
+import { dbAsyncLocalStorage } from "@/db";
 
-const getEnv = (key: string): string => {
+export const getEnv = (key: string): string => {
+  const runtimeEnv = dbAsyncLocalStorage.getStore()?.runtimeEnv;
   return (
+    runtimeEnv?.[key] ||
     (typeof process !== "undefined" && process.env?.[key]) ||
     (typeof import.meta !== "undefined" && import.meta.env?.[key]) ||
     ""
   );
 };
 
-const supabaseUrl = getEnv("SUPABASE_URL");
-const supabaseAnonKey = getEnv("SUPABASE_ANON_KEY");
-const supabaseServiceKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+export function getSupabaseAdminClient() {
+  const url = getEnv("SUPABASE_URL");
+  const key = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return null as any;
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
 
-export const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : (null as any);
+export function getSupabaseAnonClient() {
+  const url = getEnv("SUPABASE_URL");
+  const key = getEnv("SUPABASE_ANON_KEY");
+  if (!url || !key) return null as any;
+  return createClient(url, key);
+}
 
-export const supabaseAdmin =
-  supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
-    : (null as any);
+let cachedStaticAdmin: any = null;
+export const supabaseAdmin = new Proxy({} as any, {
+  get(_target, prop) {
+    const dynamicClient = getSupabaseAdminClient();
+    if (dynamicClient) return dynamicClient[prop];
+    if (!cachedStaticAdmin) {
+      const url = getEnv("SUPABASE_URL");
+      const key = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+      if (url && key) {
+        cachedStaticAdmin = createClient(url, key, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+      }
+    }
+    return cachedStaticAdmin ? cachedStaticAdmin[prop] : undefined;
+  },
+});
+
+let cachedStaticAnon: any = null;
+export const supabase = new Proxy({} as any, {
+  get(_target, prop) {
+    const dynamicClient = getSupabaseAnonClient();
+    if (dynamicClient) return dynamicClient[prop];
+    if (!cachedStaticAnon) {
+      const url = getEnv("SUPABASE_URL");
+      const key = getEnv("SUPABASE_ANON_KEY");
+      if (url && key) {
+        cachedStaticAnon = createClient(url, key);
+      }
+    }
+    return cachedStaticAnon ? cachedStaticAnon[prop] : undefined;
+  },
+});
 
 export const GALLERY_BUCKET = "gallery-images";
 export const DOCUMENTS_BUCKET = "academic-documents";

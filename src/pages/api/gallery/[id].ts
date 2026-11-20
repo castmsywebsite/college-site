@@ -114,7 +114,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
         .where(eq(galleryImages.id, id))
         .returning();
       return updated;
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     if (!updatedImage) {
       return new Response(JSON.stringify({ error: "Image not found" }), {
@@ -201,7 +201,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
 
     await withDbRetry(async (database) => {
       await database.delete(galleryImages).where(eq(galleryImages.id, id));
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(
       JSON.stringify({ message: "Image deleted successfully" }),

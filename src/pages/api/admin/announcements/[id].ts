@@ -38,7 +38,7 @@ export const PUT: APIRoute = async (ctx) => {
                 })
                 .where(eq(announcementsTable.id, id))
                 .returning();
-        }, runtimeEnv);
+        }, runtimeEnv, false);
 
         if (updatedAnnouncement.length === 0) {
             return new Response(JSON.stringify({ error: "Announcement not found" }), {
@@ -91,7 +91,7 @@ export const DELETE: APIRoute = async (ctx) => {
                 .delete(announcementsTable)
                 .where(eq(announcementsTable.id, id))
                 .returning();
-        }, runtimeEnv);
+        }, runtimeEnv, false);
 
         if (deletedAnnouncement.length === 0) {
             return new Response(JSON.stringify({ error: "Announcement not found" }), {

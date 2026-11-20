@@ -100,7 +100,7 @@ export const PUT: APIRoute = async (ctx) => {
         .update(departmentsTable)
         .set(values)
         .where(eq(departmentsTable.id, id));
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
@@ -151,7 +151,7 @@ export const DELETE: APIRoute = async (ctx) => {
       }
 
       await db.delete(departmentsTable).where(eq(departmentsTable.id, id));
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },

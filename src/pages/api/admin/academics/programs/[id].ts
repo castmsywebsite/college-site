@@ -83,7 +83,7 @@ export const PUT: APIRoute = async (ctx) => {
 
     await withDbRetry(async (db) => {
       await db.update(programsTable).set(values).where(eq(programsTable.id, id));
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
@@ -125,7 +125,7 @@ export const DELETE: APIRoute = async (ctx) => {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
     await withDbRetry(async (db) => {
       await db.delete(programsTable).where(eq(programsTable.id, id));
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },

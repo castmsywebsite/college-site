@@ -1,7 +1,17 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 export type DrizzleDatabase = ReturnType<typeof drizzle>;
+
+export interface RequestDatabaseContext {
+  db: DrizzleDatabase;
+  client: ReturnType<typeof postgres>;
+  runtimeEnv?: Record<string, any>;
+}
+
+// AsyncLocalStorage providing request-scoped database isolation for Cloudflare Workers
+export const dbAsyncLocalStorage = new AsyncLocalStorage<RequestDatabaseContext>();
 
 // Safely resolve the database connection URL across Cloudflare Pages runtime and local Node.js environments
 export function getDbUrl(runtimeEnv?: Record<string, any>): string {
@@ -31,39 +41,65 @@ export function createPostgresClient(connectionUrl?: string) {
   return postgres(url, {
     prepare: false, // MANDATORY for Supabase transaction pooler (port 6543)
     ssl: "require", // MANDATORY for Cloudflare Workers -> Supabase TCP/TLS handshake
-    max: 1, // 1 connection per serverless isolate to prevent pool exhaustion
-    idle_timeout: 20, // Cleanly close idle sockets after 20s
+    max: 5, // Support up to 5 concurrent queries per request isolate (e.g. Promise.all)
+    idle_timeout: 15, // Cleanly close idle sockets after 15s
     connect_timeout: 10, // 10s connection timeout
-    max_lifetime: 60 * 30, // 30 minutes max lifetime
   });
 }
 
-// Active singleton client & drizzle instance
-let currentClient: ReturnType<typeof postgres> | null = null;
-let currentDb: DrizzleDatabase | null = null;
+// Fallback client for outside request lifecycles (e.g. CLI scripts or background tasks)
+let fallbackClient: ReturnType<typeof postgres> | null = null;
+let fallbackDb: DrizzleDatabase | null = null;
 
+function getFallbackDb(runtimeEnv?: Record<string, any>): DrizzleDatabase {
+  if (!fallbackClient || !fallbackDb) {
+    fallbackClient = createPostgresClient(getDbUrl(runtimeEnv));
+    fallbackDb = drizzle(fallbackClient);
+  }
+  return fallbackDb;
+}
+
+// Create a fresh request-scoped database context for a request lifecycle
+export function createRequestDb(runtimeEnv?: Record<string, any>): RequestDatabaseContext {
+  const url = getDbUrl(runtimeEnv);
+  const client = createPostgresClient(url);
+  const db = drizzle(client);
+  return { db, client, runtimeEnv };
+}
+
+// Retrieve the database instance: uses current request's store from AsyncLocalStorage if available
 export function getDb(runtimeEnv?: Record<string, any>): DrizzleDatabase {
-  if (!currentClient || !currentDb) {
-    const url = getDbUrl(runtimeEnv);
-    currentClient = createPostgresClient(url);
-    currentDb = drizzle(currentClient);
+  const store = dbAsyncLocalStorage.getStore();
+  if (store?.db) {
+    return store.db;
   }
-  return currentDb;
+  return getFallbackDb(runtimeEnv);
 }
 
-// Reset client and re-establish fresh connection if a socket drops
+// Reset client and re-establish fresh connection if needed
 export function resetDbClient(runtimeEnv?: Record<string, any>): DrizzleDatabase {
-  if (currentClient) {
+  const store = dbAsyncLocalStorage.getStore();
+  if (store) {
     try {
-      currentClient.end({ timeout: 1 }).catch(() => {});
+      store.client.end({ timeout: 1 }).catch(() => {});
     } catch {}
-    currentClient = null;
-    currentDb = null;
+    const newContext = createRequestDb(runtimeEnv || store.runtimeEnv);
+    store.client = newContext.client;
+    store.db = newContext.db;
+    return store.db;
   }
-  return getDb(runtimeEnv);
+
+  if (fallbackClient) {
+    try {
+      fallbackClient.end({ timeout: 1 }).catch(() => {});
+    } catch {}
+    fallbackClient = null;
+    fallbackDb = null;
+  }
+  return getFallbackDb(runtimeEnv);
 }
 
-// Transparent Proxy so any module importing `db` directly gets the active, healthy client
+// Transparent Proxy so any module importing `db` directly gets the active request-scoped client
 export const db = new Proxy({} as DrizzleDatabase, {
   get(_target, prop) {
     const activeDb = getDb();
@@ -87,6 +123,7 @@ export function isConnectionError(error: any): boolean {
     msg.includes("connection closed") ||
     msg.includes("econnreset") ||
     msg.includes("broken pipe") ||
+    msg.includes("cannot perform i/o") ||
     code === "57p01" || // ADMIN SHUTDOWN
     code === "08006" || // CONNECTION FAILURE
     code === "08001" || // SQLCLIENT UNABLE TO ESTABLISH SQLCONNECTION
@@ -95,18 +132,21 @@ export function isConnectionError(error: any): boolean {
 }
 
 // Executes an operation with automatic single retry on transient connection drops
+// CRITICAL SAFETY RULE: Retries ONLY idempotent read operations (SELECT).
+// Never automatically retries mutations (INSERT, UPDATE, DELETE) to prevent duplicates.
 export async function withDbRetry<T>(
   operation: (database: DrizzleDatabase) => Promise<T>,
-  runtimeEnv?: Record<string, any>
+  runtimeEnv?: Record<string, any>,
+  isIdempotent: boolean = true
 ): Promise<T> {
   const activeDb = getDb(runtimeEnv);
   try {
     return await operation(activeDb);
   } catch (err: any) {
-    if (isConnectionError(err)) {
-      console.warn("Database connection dropped or stale. Reconnecting and retrying...", err.message);
-      const freshDb = resetDbClient(runtimeEnv);
-      return await operation(freshDb);
+    if (isIdempotent && isConnectionError(err)) {
+      console.warn("Idempotent DB query hit dropped connection. Retrying once...", err.message);
+      await new Promise(res => setTimeout(res, 50));
+      return await operation(activeDb);
     }
     throw err;
   }

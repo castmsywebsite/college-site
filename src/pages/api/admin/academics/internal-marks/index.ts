@@ -77,7 +77,7 @@ export const POST: APIRoute = async (ctx) => {
           semester,
           date: new Date(dateStr),
         });
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(
       JSON.stringify({ message: "Internal marks created", id }),

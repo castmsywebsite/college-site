@@ -122,7 +122,7 @@ export const PUT: APIRoute = async (ctx) => {
       } as const;
 
       await db.update(staffTable).set(values).where(eq(staffTable.id, id));
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -158,7 +158,7 @@ export const DELETE: APIRoute = async (ctx) => {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
     await withDbRetry(async (db) => {
       await db.delete(staffTable).where(eq(staffTable.id, id));
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(null, { status: 204 });
   } catch (error: any) {

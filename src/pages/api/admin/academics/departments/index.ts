@@ -71,7 +71,7 @@ export const POST: APIRoute = async (ctx) => {
 
     await withDbRetry(async (db) => {
       await db.insert(departmentsTable).values(values);
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify({ id, success: true }), {
       status: 201,

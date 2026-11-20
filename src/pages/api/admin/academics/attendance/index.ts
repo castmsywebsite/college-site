@@ -77,7 +77,7 @@ export const POST: APIRoute = async (ctx) => {
           semester,
           date: new Date(dateStr),
         });
-    }, runtimeEnv);
+    }, runtimeEnv, false);
 
     return new Response(JSON.stringify({ message: "Attendance created", id }), {
       status: 201,
