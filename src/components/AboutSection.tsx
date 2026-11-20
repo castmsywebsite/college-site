@@ -121,7 +121,7 @@ const AboutSection: React.FC = () => {
                 <img
                   src="/assets/images/princi.jpeg"
                   alt="Principal"
-                  className="rounded-lg shadow-lg w-full h-80 object-cover"
+                  className="rounded-lg shadow-lg w-full h-80 object-cover object-top"
                 />
                 <div className="mt-4 text-center">
                   <h3 className="text-xl font-bold text-gray-900">

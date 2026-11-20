@@ -37,11 +37,22 @@ const EventsSection: React.FC = () => {
                 key={index}
                 className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
               >
-                <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] md:h-72 overflow-hidden bg-slate-100 flex items-center justify-center">
+                <div className="relative w-full h-64 sm:h-72 md:h-80 lg:h-96 overflow-hidden bg-slate-900 flex items-center justify-center">
+                  {/* Ambient Blurred Backdrop to gracefully fill any card aspect ratio */}
+                  <img
+                    src={event.image}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-40 select-none pointer-events-none"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[1px]" />
+
+                  {/* Main Foreground Image - Fully preserved with object-contain, never cropped */}
                   <img
                     src={event.image}
                     alt={event.title}
-                    className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-500"
+                    className="relative z-10 max-h-full max-w-full w-auto h-auto object-contain mx-auto transition-transform duration-500 hover:scale-[1.02]"
                     loading="lazy"
                   />
                 </div>

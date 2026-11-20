@@ -154,7 +154,7 @@ const StudentPlacementsCarousel: React.FC = () => {
                     {slide.map((student, slideIndex) => (
                       <div
                         key={slideIndex}
-                        className="relative h-48 sm:h-56 lg:h-64 overflow-hidden rounded-lg hover:shadow-lg transition-shadow bg-gray-100"
+                        className="relative h-64 sm:h-72 lg:h-80 overflow-hidden rounded-lg hover:shadow-lg transition-shadow bg-gray-100"
                       >
                         <img
                           src={student.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=random`}

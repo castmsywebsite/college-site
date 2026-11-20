@@ -281,7 +281,7 @@ const StudentLifeSection: React.FC = () => {
                   <img
                     src="https://images.pexels.com/photos/3184360/pexels-photo-3184360.jpeg"
                     alt="Placement Activities"
-                    className="rounded-lg shadow-md w-full h-48 object-cover"
+                    className="rounded-lg shadow-md w-full h-56 sm:h-64 object-cover object-top"
                   />
                 </div>
               </div>
