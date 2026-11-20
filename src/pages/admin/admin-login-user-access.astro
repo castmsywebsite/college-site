@@ -1,8 +1,12 @@
 ---
-import Layout from "@/layouts/Layout.astro";
+import AdminAuthLayout from "@/layouts/AdminAuthLayout.astro";
 import LoginScreen from "@/components/admin/LoginScreen";
+
+if (Astro.locals.session) {
+  return Astro.redirect("/admin");
+}
 ---
 
-<Layout>
+<AdminAuthLayout title="Admin Login">
   <LoginScreen client:load />
-</Layout>
+</AdminAuthLayout>

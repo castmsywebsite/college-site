@@ -159,7 +159,7 @@ export const authActions = {
       }
 
       const { db } = context.locals;
-      const auth = Auth.getInstance(db);
+      const auth = Auth.getInstance((db || null) as any);
       try {
         const runtimeEnv = (context.locals as any)?.runtime?.env;
         const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
@@ -168,9 +168,9 @@ export const authActions = {
         if (shouldUseSupabaseRest(runtimeEnv)) {
           const client = supabaseAdmin || supabase;
           const { data } = await client
-            .from("user")
+            .from("users")
             .select("*")
-            .eq("username", input.username)
+            .ilike("username", normalizedUsername)
             .limit(1);
           if (data && data.length > 0) {
             user = data[0];
@@ -181,16 +181,16 @@ export const authActions = {
               const [u] = await database
                 .select()
                 .from(userTable)
-                .where(eq(userTable.username, input.username));
+                .where(eq(userTable.username, normalizedUsername));
               return u;
             }, runtimeEnv);
           } catch (dbErr) {
             console.warn("Login DB query failed, falling back to Supabase REST:", dbErr);
             const client = supabaseAdmin || supabase;
             const { data } = await client
-              .from("user")
+              .from("users")
               .select("*")
-              .eq("username", input.username)
+              .ilike("username", normalizedUsername)
               .limit(1);
             if (data && data.length > 0) {
               user = data[0];
@@ -207,9 +207,13 @@ export const authActions = {
           });
         }
 
+        const normalizedHash = user.password_hash?.startsWith("$2y$")
+          ? user.password_hash.replace(/^\$2y\$/, "$2a$")
+          : user.password_hash;
+
         const isValidPassword = await bcrypt.compare(
           input.password,
-          user.password_hash
+          normalizedHash
         );
 
         if (!isValidPassword) {
@@ -253,21 +257,22 @@ export const authActions = {
     handler: async (_input, context) => {
       const { db } = context.locals;
       const session = context.locals.session;
+      const auth = Auth.getInstance((db || null) as any);
 
-      if (session && db) {
-        const auth = Auth.getInstance(db);
-        await auth.invalidateSession(session.id);
+      if (session) {
+        try {
+          await auth.invalidateSession(session.id);
+        } catch (e) {
+          console.warn("Logout session invalidation warning:", e);
+        }
       }
 
-      if (db) {
-        const auth = Auth.getInstance(db);
-        const clearCookie = auth.clearSessionCookie();
-        context.cookies.set(
-          clearCookie.name,
-          clearCookie.value,
-          clearCookie.attributes
-        );
-      }
+      const clearCookie = auth.clearSessionCookie();
+      context.cookies.set(
+        clearCookie.name,
+        clearCookie.value,
+        clearCookie.attributes
+      );
 
       return {
         success: true,

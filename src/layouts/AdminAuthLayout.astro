@@ -1,0 +1,82 @@
+---
+import "@/styles/global.css";
+
+interface Props {
+  title?: string;
+}
+
+const { title = "Admin Login" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/assets/images/logo.png" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} | CAS TMSY Admin</title>
+
+    <!-- BFCache Restoration Defense -->
+    <script is:inline>
+      (function() {
+        window.addEventListener('pageshow', function(event) {
+          var isBfCache = event.persisted || 
+            (window.performance && window.performance.getEntriesByType && 
+             window.performance.getEntriesByType('navigation')[0] && 
+             window.performance.getEntriesByType('navigation')[0].type === 'back_forward');
+
+          if (isBfCache) {
+            if (document.body) document.body.style.display = 'none';
+            window.location.reload();
+          }
+        });
+        window.addEventListener('pagehide', function(event) {
+          if (event.persisted) {
+            if (document.body) document.body.style.display = 'none';
+          }
+        });
+      })();
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-50 font-inter flex flex-col justify-between">
+    <!-- Minimal Institutional Admin Header (No public marketing links) -->
+    <header class="bg-white border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <a href="/admin" class="flex items-center space-x-3 text-gray-900 group">
+          <img src="/assets/images/logo.png" alt="CAS TMSY" class="h-9 w-auto object-contain" />
+          <div class="flex flex-col">
+            <span class="font-bold text-base leading-tight tracking-tight text-indigo-900">
+              CAS Thamarassery
+            </span>
+            <span class="text-xs text-gray-500 font-medium">Institutional Admin Portal</span>
+          </div>
+        </a>
+
+        <a
+          href="/"
+          class="inline-flex items-center text-xs sm:text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors"
+        >
+          <span class="mr-1">&larr;</span> Back to College Site
+        </a>
+      </div>
+    </header>
+
+    <!-- Dedicated Admin Content Area -->
+    <main class="flex-grow flex items-center justify-center py-10 px-4 sm:px-6 lg:px-8">
+      <slot />
+    </main>
+
+    <!-- Clean Administrative Footer -->
+    <footer class="py-6 border-t border-gray-200 bg-white text-center text-xs text-gray-500">
+      <div class="max-w-7xl mx-auto px-4 space-y-1">
+        <p class="font-medium text-gray-700">
+          College of Applied Science, Thamarassery &bull; Managed by IHRD, Govt. of Kerala
+        </p>
+        <p class="text-gray-400">
+          Authorized personnel only. All access and administrative actions are logged and audited.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

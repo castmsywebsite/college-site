@@ -161,7 +161,7 @@ export class Auth {
       try {
         const { supabaseAdmin, supabase } = await import("./supabase");
         const client = supabaseAdmin || supabase;
-        const { data } = await client.from("user").select("id, username").eq("id", session.userId);
+        const { data } = await client.from("users").select("id, username").eq("id", session.userId);
         if (data && data.length > 0) {
           userData = data[0];
         }

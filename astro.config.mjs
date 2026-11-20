@@ -14,9 +14,10 @@ export default defineConfig({
   adapter: cloudflare(),
   vite: {
     resolve: {
-      // @ts-ignore
-      alias: import.meta.env.PROD && {
-        "react-dom/server": "react-dom/server.edge",
+      alias: {
+        ...(process.env.NODE_ENV === "production"
+          ? { "react-dom/server": "react-dom/server.edge" }
+          : {}),
       },
     },
 
