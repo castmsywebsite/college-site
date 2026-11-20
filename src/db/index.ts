@@ -15,6 +15,15 @@ export const dbAsyncLocalStorage = new AsyncLocalStorage<RequestDatabaseContext>
 
 // Safely resolve the database connection URL across Cloudflare Pages runtime and local Node.js environments
 export function getDbUrl(runtimeEnv?: Record<string, any>): string {
+  // Priority 1: Cloudflare Hyperdrive binding (accelerated edge pooling for Cloudflare Pages)
+  if (runtimeEnv?.HYPERDRIVE?.connectionString) {
+    return runtimeEnv.HYPERDRIVE.connectionString;
+  }
+  if (typeof globalThis !== "undefined" && (globalThis as any)?.HYPERDRIVE?.connectionString) {
+    return (globalThis as any).HYPERDRIVE.connectionString;
+  }
+
+  // Priority 2: Direct or Pooler DB_URL environment variable
   let url =
     runtimeEnv?.DB_URL ||
     (typeof globalThis !== "undefined" && (globalThis as any)?.__env__?.DB_URL) ||

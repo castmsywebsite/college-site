@@ -6,7 +6,8 @@ export const GET: APIRoute = async ({ locals }) => {
     (globalThis as any)?.__env__ ||
     (typeof process !== "undefined" ? process.env : undefined);
 
-  const dbUrl = runtimeEnv?.DB_URL || "";
+  const hyperdrive = runtimeEnv?.HYPERDRIVE?.connectionString || (globalThis as any)?.HYPERDRIVE?.connectionString;
+  const dbUrl = hyperdrive || runtimeEnv?.DB_URL || "";
   let host = "";
   try {
     if (dbUrl) {
@@ -17,7 +18,8 @@ export const GET: APIRoute = async ({ locals }) => {
   return new Response(
     JSON.stringify({
       status: "ok",
-      version: "fc1400d",
+      version: "hyperdrive-ready",
+      hasHyperdrive: Boolean(hyperdrive),
       hasDbUrl: Boolean(dbUrl),
       dbHost: host,
       timestamp: new Date().toISOString(),
