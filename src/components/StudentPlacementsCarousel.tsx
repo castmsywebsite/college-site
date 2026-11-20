@@ -159,7 +159,7 @@ const StudentPlacementsCarousel: React.FC = () => {
                         <img
                           src={student.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=random`}
                           alt={student.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover object-top"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=random`;

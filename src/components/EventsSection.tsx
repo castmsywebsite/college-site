@@ -35,36 +35,47 @@ const EventsSection: React.FC = () => {
             {events.map((event, index) => (
               <div
                 key={index}
-                className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
               >
-                <img
-                  src={event.image}
-                  alt={event.title}
-                  className="w-full h-48 object-cover"
-                />
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-3">
-                    <h4 className="text-lg font-semibold text-gray-900">
+                <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] md:h-72 overflow-hidden bg-slate-100 flex items-center justify-center">
+                  <img
+                    src={event.image}
+                    alt={event.title}
+                    className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-500"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="p-6 flex flex-col flex-grow">
+                  <div className="flex justify-between items-start mb-3 gap-2">
+                    <h4 className="text-lg font-semibold text-gray-900 leading-snug">
                       {event.title}
                     </h4>
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-                      {event.type}
-                    </span>
+                    {event.type && (
+                      <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap">
+                        {event.type}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center text-gray-600 mb-3">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{event.date}</span>
-                  </div>
+                  {event.date && (
+                    <div className="flex items-center text-gray-600 mb-3 text-sm">
+                      <Calendar className="h-4 w-4 mr-2 text-indigo-600 flex-shrink-0" />
+                      <span>{event.date}</span>
+                    </div>
+                  )}
 
-                  <p className="text-gray-600 text-sm mb-3">
-                    {event.description}
-                  </p>
+                  {event.description && (
+                    <p className="text-gray-600 text-sm mb-3 line-clamp-3">
+                      {event.description}
+                    </p>
+                  )}
 
-                  <div className="flex items-center text-gray-500 text-sm">
-                    <Users className="h-4 w-4 mr-2" />
-                    <span>{event.participants}</span>
-                  </div>
+                  {event.participants && (
+                    <div className="mt-auto flex items-center text-gray-500 text-sm">
+                      <Users className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+                      <span>{event.participants}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

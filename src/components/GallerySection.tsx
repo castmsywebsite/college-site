@@ -134,7 +134,7 @@ const GallerySection: React.FC = () => {
       <img
         src={image.imageUrl}
         alt={image.title}
-        className={inLightbox ? "max-w-full max-h-full object-contain" : "w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"}
+        className={inLightbox ? "max-w-full max-h-full object-contain" : "w-full h-56 sm:h-64 object-cover object-top group-hover:scale-105 transition-transform duration-300"}
       />
     );
   };
