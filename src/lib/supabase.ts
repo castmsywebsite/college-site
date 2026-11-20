@@ -36,8 +36,8 @@ export function isCloudflareWorker(runtimeEnv?: Record<string, any>): boolean {
 export function shouldUseSupabaseRest(runtimeEnv?: Record<string, any>): boolean {
   const env =
     runtimeEnv ||
+    (globalThis as any)?.__active_db_context__?.runtimeEnv ||
     (globalThis as any)?.__env__ ||
-    dbAsyncLocalStorage.getStore()?.runtimeEnv ||
     (typeof process !== "undefined" ? process.env : undefined);
 
   if (env?.USE_SUPABASE_REST === "true") return true;
@@ -51,7 +51,10 @@ export function shouldUseSupabaseRest(runtimeEnv?: Record<string, any>): boolean
 }
 
 export function getSupabaseAdminClient(passedEnv?: Record<string, any>) {
-  const env = passedEnv || dbAsyncLocalStorage.getStore()?.runtimeEnv || (globalThis as any)?.__env__;
+  const env =
+    passedEnv ||
+    (globalThis as any)?.__active_db_context__?.runtimeEnv ||
+    (globalThis as any)?.__env__;
   const url = env?.SUPABASE_URL || getEnv("SUPABASE_URL");
   const key =
     env?.SUPABASE_SERVICE_ROLE_KEY ||
@@ -68,7 +71,10 @@ export function getSupabaseAdminClient(passedEnv?: Record<string, any>) {
 }
 
 export function getSupabaseAnonClient(passedEnv?: Record<string, any>) {
-  const env = passedEnv || dbAsyncLocalStorage.getStore()?.runtimeEnv || (globalThis as any)?.__env__;
+  const env =
+    passedEnv ||
+    (globalThis as any)?.__active_db_context__?.runtimeEnv ||
+    (globalThis as any)?.__env__;
   const url = env?.SUPABASE_URL || getEnv("SUPABASE_URL");
   const key =
     env?.SUPABASE_ANON_KEY ||
