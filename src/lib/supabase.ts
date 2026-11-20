@@ -1,11 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { dbAsyncLocalStorage } from "@/db";
 
 export const getEnv = (key: string): string => {
-  const storeEnv = dbAsyncLocalStorage.getStore()?.runtimeEnv;
   const globalEnv = (globalThis as any)?.__env__;
+  const activeContextEnv = (globalThis as any)?.__active_db_context__?.runtimeEnv;
   return (
-    storeEnv?.[key] ||
+    activeContextEnv?.[key] ||
     globalEnv?.[key] ||
     (typeof globalThis !== "undefined" && (globalThis as any)?.[key]) ||
     (typeof process !== "undefined" && process.env?.[key]) ||

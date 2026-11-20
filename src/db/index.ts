@@ -1,6 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { AsyncLocalStorage } from "node:async_hooks";
 
 export type DrizzleDatabase = ReturnType<typeof drizzle>;
 
@@ -10,8 +9,31 @@ export interface RequestDatabaseContext {
   runtimeEnv?: Record<string, any>;
 }
 
-// AsyncLocalStorage providing request-scoped database isolation for Cloudflare Workers
-export const dbAsyncLocalStorage = new AsyncLocalStorage<RequestDatabaseContext>();
+// Resilient Request-scoped Context Storage compatible with both Cloudflare Workers workerd and Node.js
+class ContextStore<T> {
+  private _store: T | undefined;
+  getStore(): T | undefined {
+    return this._store || (globalThis as any)?.__active_db_context__;
+  }
+  run<R>(store: T, callback: () => R): R {
+    const prev = this._store;
+    this._store = store;
+    (globalThis as any).__active_db_context__ = store;
+    try {
+      return callback();
+    } finally {
+      this._store = prev;
+      (globalThis as any).__active_db_context__ = prev;
+    }
+  }
+}
+
+let ContextStoreClass: any = ContextStore;
+if (typeof (globalThis as any)?.AsyncLocalStorage !== "undefined") {
+  ContextStoreClass = (globalThis as any).AsyncLocalStorage;
+}
+
+export const dbAsyncLocalStorage = new ContextStoreClass();
 
 // Safely resolve the database connection URL across Cloudflare Pages runtime and local Node.js environments
 export function getDbUrl(runtimeEnv?: Record<string, any>): string {
