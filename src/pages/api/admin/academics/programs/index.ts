@@ -6,27 +6,50 @@ import { validateSameOrigin } from "@/lib/api-auth";
 export const GET: APIRoute = async (ctx) => {
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
     let rows: any[] = [];
-    try {
-      rows = await withDbRetry(async (db) => {
-        return await db.select().from(programsTable);
-      }, (ctx.locals as any)?.db || runtimeEnv);
-    } catch (dbError: any) {
-      console.warn("Programs Drizzle query failed, falling back to Supabase REST:", dbError?.message);
-      const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
       const client = supabaseAdmin || supabase;
-      const { data, error } = await client.from("programs").select("*");
+      const { data, error } = await client.from("programs").select("*").order("name", { ascending: true });
       if (error) throw error;
       rows = (data || []).map((row: any) => ({
         id: row.id,
         name: row.name,
-        code: row.code,
-        departmentId: row.department_id,
-        durationYears: row.duration_years,
-        type: row.type,
+        level: row.level,
+        duration: row.duration,
+        seats: row.seats,
+        affiliation: row.affiliation,
+        description: row.description,
+        eligibility: row.eligibility,
+        curriculum: row.curriculum,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
+    } else {
+      try {
+        rows = await withDbRetry(async (db) => {
+          return await db.select().from(programsTable);
+        }, (ctx.locals as any)?.db || runtimeEnv);
+      } catch (dbError: any) {
+        console.warn("Programs Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client.from("programs").select("*").order("name", { ascending: true });
+        if (error) throw error;
+        rows = (data || []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          level: row.level,
+          duration: row.duration,
+          seats: row.seats,
+          affiliation: row.affiliation,
+          description: row.description,
+          eligibility: row.eligibility,
+          curriculum: row.curriculum,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      }
     }
 
     return new Response(JSON.stringify(rows), {
@@ -73,9 +96,16 @@ export const POST: APIRoute = async (ctx) => {
       curriculum: Array.isArray(body.curriculum) ? body.curriculum : null,
     } as const;
 
-    await withDbRetry(async (db) => {
-      await db.insert(programsTable).values(values);
-    }, runtimeEnv, false);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: insErr } = await client.from("programs").insert(values);
+      if (insErr) throw insErr;
+    } else {
+      await withDbRetry(async (db) => {
+        await db.insert(programsTable).values(values);
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ id, success: true }), {
       status: 201,

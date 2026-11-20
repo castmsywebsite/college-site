@@ -14,23 +14,9 @@ export const GET: APIRoute = async (ctx) => {
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
     let rows: any[] = [];
-    try {
-      rows = await withDbRetry(async (db) => {
-        return await db
-          .select({
-            staff: staffTable,
-            departmentName: departmentsTable.name,
-          })
-          .from(staffTable)
-          .leftJoin(
-            departmentsTable,
-            eq(staffTable.departmentId, departmentsTable.id)
-          )
-          .orderBy(asc(staffTable.displayOrder));
-      }, (ctx.locals as any)?.db || runtimeEnv);
-    } catch (dbError: any) {
-      console.warn("Administration Drizzle query failed, falling back to Supabase REST:", dbError?.message);
-      const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
       const client = supabaseAdmin || supabase;
       const { data, error } = await client
         .from("staff")
@@ -41,20 +27,70 @@ export const GET: APIRoute = async (ctx) => {
         staff: {
           id: s.id,
           name: s.name,
-          category: s.category,
-          designation: s.designation,
-          departmentId: s.department_id,
+          position: s.position,
+          designation: s.position,
+          qualification: s.qualification,
+          experience: s.experience,
           email: s.email,
           phone: s.phone,
-          qualification: s.qualification,
-          photoUrl: s.photo_url,
+          image: s.image,
+          photoUrl: s.image,
+          departmentId: s.department_id,
           displayOrder: s.display_order,
-          roles: s.roles,
+          category: s.category,
+          achievements: s.achievements,
+          roles: s.achievements,
           createdAt: s.created_at,
           updatedAt: s.updated_at,
         },
         departmentName: s.departments?.name || null,
       }));
+    } else {
+      try {
+        rows = await withDbRetry(async (db) => {
+          return await db
+            .select({
+              staff: staffTable,
+              departmentName: departmentsTable.name,
+            })
+            .from(staffTable)
+            .leftJoin(
+              departmentsTable,
+              eq(staffTable.departmentId, departmentsTable.id)
+            )
+            .orderBy(asc(staffTable.displayOrder));
+        }, (ctx.locals as any)?.db || runtimeEnv);
+      } catch (dbError: any) {
+        console.warn("Administration Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client
+          .from("staff")
+          .select("*, departments(name)")
+          .order("display_order", { ascending: true });
+        if (error) throw error;
+        rows = (data || []).map((s: any) => ({
+          staff: {
+            id: s.id,
+            name: s.name,
+            position: s.position,
+            designation: s.position,
+            qualification: s.qualification,
+            experience: s.experience,
+            email: s.email,
+            phone: s.phone,
+            image: s.image,
+            photoUrl: s.image,
+            departmentId: s.department_id,
+            displayOrder: s.display_order,
+            category: s.category,
+            achievements: s.achievements,
+            roles: s.achievements,
+            createdAt: s.created_at,
+            updatedAt: s.updated_at,
+          },
+          departmentName: s.departments?.name || null,
+        }));
+      }
     }
 
     const result = rows.map((row) => {
@@ -118,31 +154,62 @@ export const POST: APIRoute = async (ctx) => {
 
     const id = crypto.randomUUID();
 
-    await withDbRetry(async (db) => {
-      // Resolve department ID from database
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
       let resolvedDepartmentId: string | null = null;
       if (validation.canonicalDept) {
-        resolvedDepartmentId = await resolveDepartmentId(db, validation.canonicalDept);
+        resolvedDepartmentId = await resolveDepartmentId(client, validation.canonicalDept);
       }
 
       const values = {
         id,
         name: String(body.name || ""),
-        position: String(body.position || ""),
+        position: String(body.position || body.designation || ""),
         qualification: body.qualification ? String(body.qualification) : null,
         experience: body.experience ? String(body.experience) : null,
         email: body.email ? String(body.email) : null,
         phone: body.phone ? String(body.phone) : null,
-        image: body.image ? String(body.image) : null,
-        departmentId: resolvedDepartmentId,
-        displayOrder:
+        image: body.image || body.photoUrl ? String(body.image || body.photoUrl) : null,
+        department_id: resolvedDepartmentId,
+        display_order:
           typeof body.displayOrder === "number" ? body.displayOrder : 99,
         category,
-        achievements: Array.isArray(body.achievements) ? body.achievements : null,
-      } as const;
+        achievements: Array.isArray(body.achievements)
+          ? body.achievements
+          : Array.isArray(body.roles)
+            ? body.roles
+            : null,
+      };
 
-      await db.insert(staffTable).values(values);
-    }, runtimeEnv, false);
+      const { error: insErr } = await client.from("staff").insert(values);
+      if (insErr) throw insErr;
+    } else {
+      await withDbRetry(async (db) => {
+        // Resolve department ID from database
+        let resolvedDepartmentId: string | null = null;
+        if (validation.canonicalDept) {
+          resolvedDepartmentId = await resolveDepartmentId(db, validation.canonicalDept);
+        }
+
+        const values = {
+          id,
+          name: String(body.name || ""),
+          position: String(body.position || body.designation || ""),
+          qualification: body.qualification ? String(body.qualification) : null,
+          experience: body.experience ? String(body.experience) : null,
+          email: body.email ? String(body.email) : null,
+          phone: body.phone ? String(body.phone) : null,
+          image: body.image || body.photoUrl ? String(body.image || body.photoUrl) : null,
+          departmentId: resolvedDepartmentId,
+          displayOrder:
+            typeof body.displayOrder === "number" ? body.displayOrder : 99,
+          category,
+          achievements: Array.isArray(body.achievements) ? body.achievements : null,
+        } as const;
+
+        await db.insert(staffTable).values(values);
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ id, success: true }), {
       status: 201,

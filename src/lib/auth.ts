@@ -59,17 +59,37 @@ export class Auth {
       expiresAt: new Date(now + this.sessionDurationSeconds * 1000),
     };
 
-    try {
-      await this.db.insert(sessionTable).values(session);
-      return session;
-    } catch (err: any) {
-      if (isConnectionError(err)) {
-        console.warn("createSession: DB connection dropped, retrying with fresh client...");
-        this.db = resetDbClient() as unknown as PostgresJsDatabase<Record<string, never>>;
+    if (this.db) {
+      try {
         await this.db.insert(sessionTable).values(session);
         return session;
+      } catch (err: any) {
+        if (isConnectionError(err)) {
+          console.warn("createSession: DB connection dropped, retrying with fresh client...");
+          try {
+            this.db = resetDbClient() as unknown as PostgresJsDatabase<Record<string, never>>;
+            await this.db.insert(sessionTable).values(session);
+            return session;
+          } catch (retryErr) {
+            console.warn("createSession DB retry failed, falling back to REST:", retryErr);
+          }
+        }
       }
-      throw err;
+    }
+
+    try {
+      const { supabaseAdmin, supabase } = await import("./supabase");
+      const client = supabaseAdmin || supabase;
+      const { error } = await client.from("session").insert({
+        id: session.id,
+        user_id: session.userId,
+        expires_at: session.expiresAt.toISOString(),
+      });
+      if (error) throw error;
+      return session;
+    } catch (restErr) {
+      console.error("createSession REST fallback failed:", restErr);
+      throw restErr;
     }
   }
 
@@ -78,10 +98,34 @@ export class Auth {
   ): Promise<{ session: Session | null; user: User | null }> {
     const now = Date.now();
 
-    const sessionRows = await this.db
-      .select()
-      .from(sessionTable)
-      .where(eq(sessionTable.id, sessionId));
+    let sessionRows: any[] = [];
+    if (this.db) {
+      try {
+        sessionRows = await this.db
+          .select()
+          .from(sessionTable)
+          .where(eq(sessionTable.id, sessionId));
+      } catch (dbErr) {
+        console.warn("Auth DB validate failed, trying Supabase REST:", dbErr);
+      }
+    }
+
+    if (sessionRows.length === 0) {
+      try {
+        const { supabaseAdmin, supabase } = await import("./supabase");
+        const client = supabaseAdmin || supabase;
+        const { data } = await client.from("session").select("*").eq("id", sessionId);
+        if (data && data.length > 0) {
+          sessionRows = data.map((s: any) => ({
+            id: s.id,
+            userId: s.user_id,
+            expiresAt: new Date(s.expires_at),
+          }));
+        }
+      } catch (restErr) {
+        console.warn("Auth REST fallback failed:", restErr);
+      }
+    }
 
     if (sessionRows.length === 0) return { session: null, user: null };
 
@@ -92,33 +136,37 @@ export class Auth {
     };
 
     if (now >= session.expiresAt.getTime()) {
-      try {
-        await this.db.delete(sessionTable).where(eq(sessionTable.id, session.id));
-      } catch (delErr) {
-        console.warn("Failed to delete expired session:", delErr);
+      if (this.db) {
+        try {
+          await this.db.delete(sessionTable).where(eq(sessionTable.id, session.id));
+        } catch (delErr) {
+          console.warn("Failed to delete expired session:", delErr);
+        }
       }
       return { session: null, user: null };
     }
 
-    const halfLifeThreshold =
-      session.expiresAt.getTime() - (this.sessionDurationSeconds * 1000) / 2;
-
-    if (now >= halfLifeThreshold) {
-      session.expiresAt = new Date(now + this.sessionDurationSeconds * 1000);
+    let userData: any = null;
+    if (this.db) {
       try {
-        await this.db
-          .update(sessionTable)
-          .set({ expiresAt: session.expiresAt })
-          .where(eq(sessionTable.id, sessionId));
-      } catch (updErr) {
-        console.warn("Failed to refresh session lifetime:", updErr);
-      }
+        const [u] = await this.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.id, session.userId));
+        userData = u;
+      } catch {}
     }
 
-    const [userData] = await this.db
-      .select()
-      .from(userTable)
-      .where(eq(userTable.id, session.userId));
+    if (!userData) {
+      try {
+        const { supabaseAdmin, supabase } = await import("./supabase");
+        const client = supabaseAdmin || supabase;
+        const { data } = await client.from("user").select("id, username").eq("id", session.userId);
+        if (data && data.length > 0) {
+          userData = data[0];
+        }
+      } catch {}
+    }
 
     if (!userData) return { session: null, user: null };
 
@@ -152,16 +200,28 @@ export class Auth {
   }
 
   public async invalidateSession(sessionId: string): Promise<void> {
-    try {
-      await this.db.delete(sessionTable).where(eq(sessionTable.id, sessionId));
-    } catch (err: any) {
-      if (isConnectionError(err)) {
-        console.warn("invalidateSession: DB connection dropped, retrying with fresh client...");
-        this.db = resetDbClient() as unknown as PostgresJsDatabase<Record<string, never>>;
+    if (this.db) {
+      try {
         await this.db.delete(sessionTable).where(eq(sessionTable.id, sessionId));
         return;
+      } catch (err: any) {
+        if (isConnectionError(err)) {
+          console.warn("invalidateSession: DB connection dropped, retrying with fresh client...");
+          try {
+            this.db = resetDbClient() as unknown as PostgresJsDatabase<Record<string, never>>;
+            await this.db.delete(sessionTable).where(eq(sessionTable.id, sessionId));
+            return;
+          } catch {}
+        }
       }
-      console.error("invalidateSession error:", err);
+    }
+
+    try {
+      const { supabaseAdmin, supabase } = await import("./supabase");
+      const client = supabaseAdmin || supabase;
+      await client.from("session").delete().eq("id", sessionId);
+    } catch (restErr) {
+      console.warn("invalidateSession REST error:", restErr);
     }
   }
 

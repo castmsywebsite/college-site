@@ -19,13 +19,41 @@ export const GET: APIRoute = async ({ params, locals }) => {
     }
 
     const runtimeEnv = (locals as any)?.runtime?.env;
-    const image = await withDbRetry(async (database) => {
-      const [img] = await database
-        .select()
-        .from(galleryImages)
-        .where(eq(galleryImages.id, id));
-      return img;
-    }, runtimeEnv);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("../../../lib/supabase");
+    let image: any = null;
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client
+        .from("gallery_images")
+        .select("*")
+        .eq("id", id)
+        .limit(1);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const row = data[0];
+        image = {
+          id: row.id,
+          title: row.title,
+          description: row.description,
+          category: row.category,
+          imageUrl: row.image_url,
+          fileName: row.file_name,
+          fileSize: row.file_size,
+          mimeType: row.mime_type,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      }
+    } else {
+      image = await withDbRetry(async (database) => {
+        const [img] = await database
+          .select()
+          .from(galleryImages)
+          .where(eq(galleryImages.id, id));
+        return img;
+      }, runtimeEnv);
+    }
 
     if (!image) {
       return new Response(JSON.stringify({ error: "Image not found" }), {
@@ -102,19 +130,52 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     }
 
     const runtimeEnv = (locals as any)?.runtime?.env;
-    const updatedImage = await withDbRetry(async (database) => {
-      const [updated] = await database
-        .update(galleryImages)
-        .set({
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("../../../lib/supabase");
+    let updatedImage: any = null;
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { data, error: updErr } = await client
+        .from("gallery_images")
+        .update({
           title,
           description: description || null,
           category,
-          updatedAt: new Date(),
+          updated_at: new Date().toISOString(),
         })
-        .where(eq(galleryImages.id, id))
-        .returning();
-      return updated;
-    }, runtimeEnv, false);
+        .eq("id", id)
+        .select();
+      if (updErr) throw updErr;
+      if (data && data.length > 0) {
+        const row = data[0];
+        updatedImage = {
+          id: row.id,
+          title: row.title,
+          description: row.description,
+          category: row.category,
+          imageUrl: row.image_url,
+          fileName: row.file_name,
+          fileSize: row.file_size,
+          mimeType: row.mime_type,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      }
+    } else {
+      updatedImage = await withDbRetry(async (database) => {
+        const [updated] = await database
+          .update(galleryImages)
+          .set({
+            title,
+            description: description || null,
+            category,
+            updatedAt: new Date(),
+          })
+          .where(eq(galleryImages.id, id))
+          .returning();
+        return updated;
+      }, runtimeEnv, false);
+    }
 
     if (!updatedImage) {
       return new Response(JSON.stringify({ error: "Image not found" }), {
@@ -176,13 +237,41 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     }
 
     const runtimeEnv = (locals as any)?.runtime?.env;
-    const image = await withDbRetry(async (database) => {
-      const [img] = await database
-        .select()
-        .from(galleryImages)
-        .where(eq(galleryImages.id, id));
-      return img;
-    }, runtimeEnv);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("../../../lib/supabase");
+    let image: any = null;
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client
+        .from("gallery_images")
+        .select("*")
+        .eq("id", id)
+        .limit(1);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const row = data[0];
+        image = {
+          id: row.id,
+          title: row.title,
+          description: row.description,
+          category: row.category,
+          imageUrl: row.image_url,
+          fileName: row.file_name,
+          fileSize: row.file_size,
+          mimeType: row.mime_type,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      }
+    } else {
+      image = await withDbRetry(async (database) => {
+        const [img] = await database
+          .select()
+          .from(galleryImages)
+          .where(eq(galleryImages.id, id));
+        return img;
+      }, runtimeEnv);
+    }
 
     if (!image) {
       return new Response(JSON.stringify({ error: "Image not found" }), {
@@ -199,9 +288,15 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     const filePath = extractFilePathFromUrl(image.imageUrl);
     await deleteImage(filePath);
 
-    await withDbRetry(async (database) => {
-      await database.delete(galleryImages).where(eq(galleryImages.id, id));
-    }, runtimeEnv, false);
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: delErr } = await client.from("gallery_images").delete().eq("id", id);
+      if (delErr) throw delErr;
+    } else {
+      await withDbRetry(async (database) => {
+        await database.delete(galleryImages).where(eq(galleryImages.id, id));
+      }, runtimeEnv, false);
+    }
 
     return new Response(
       JSON.stringify({ message: "Image deleted successfully" }),

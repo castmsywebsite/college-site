@@ -110,7 +110,7 @@ export function validateStaffCategoryAndDepartment(
  * Returns null for "Others" or when not applicable.
  */
 export async function resolveDepartmentId(
-  db: PostgresJsDatabase<Record<string, never>>,
+  dbOrClient: any,
   canonicalDept: CanonicalDepartment | null
 ): Promise<string | null> {
   if (!canonicalDept || canonicalDept === "Others") {
@@ -118,14 +118,36 @@ export async function resolveDepartmentId(
   }
 
   const keyword = canonicalDept.toLowerCase();
-  const rows = await db
-    .select({ id: departmentsTable.id, name: departmentsTable.name })
-    .from(departmentsTable)
-    .where(ilike(departmentsTable.name, `%${keyword}%`));
 
-  if (rows.length > 0) {
-    return rows[0].id;
+  // If Drizzle DB instance
+  if (dbOrClient && typeof dbOrClient.select === "function") {
+    try {
+      const rows = await dbOrClient
+        .select({ id: departmentsTable.id, name: departmentsTable.name })
+        .from(departmentsTable)
+        .where(ilike(departmentsTable.name, `%${keyword}%`));
+
+      if (rows.length > 0) {
+        return rows[0].id;
+      }
+      return null;
+    } catch {}
   }
+
+  // Fallback to Supabase REST
+  try {
+    const { supabaseAdmin, supabase } = await import("./supabase");
+    const client = dbOrClient || supabaseAdmin || supabase;
+    const { data } = await client
+      .from("departments")
+      .select("id, name")
+      .ilike("name", `%${keyword}%`)
+      .limit(1);
+
+    if (data && data.length > 0) {
+      return data[0].id;
+    }
+  } catch {}
 
   return null;
 }

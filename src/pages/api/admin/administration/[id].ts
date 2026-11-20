@@ -22,28 +22,66 @@ export const GET: APIRoute = async (ctx) => {
   const id = ctx.params.id!;
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    const rows = await withDbRetry(async (db) => {
-      return await db
-        .select({
-          staff: staffTable,
-          departmentName: departmentsTable.name,
-        })
-        .from(staffTable)
-        .leftJoin(
-          departmentsTable,
-          eq(staffTable.departmentId, departmentsTable.id)
-        )
-        .where(eq(staffTable.id, id));
-    }, runtimeEnv);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    let row: any = null;
 
-    if (!rows || rows.length === 0) {
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client
+        .from("staff")
+        .select("*, departments(name)")
+        .eq("id", id)
+        .limit(1);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const s = data[0];
+        row = {
+          staff: {
+            id: s.id,
+            name: s.name,
+            position: s.position,
+            designation: s.position,
+            qualification: s.qualification,
+            experience: s.experience,
+            email: s.email,
+            phone: s.phone,
+            image: s.image,
+            photoUrl: s.image,
+            departmentId: s.department_id,
+            displayOrder: s.display_order,
+            category: s.category,
+            achievements: s.achievements,
+            roles: s.achievements,
+            createdAt: s.created_at,
+            updatedAt: s.updated_at,
+          },
+          departmentName: s.departments?.name || null,
+        };
+      }
+    } else {
+      const rows = await withDbRetry(async (db) => {
+        return await db
+          .select({
+            staff: staffTable,
+            departmentName: departmentsTable.name,
+          })
+          .from(staffTable)
+          .leftJoin(
+            departmentsTable,
+            eq(staffTable.departmentId, departmentsTable.id)
+          )
+          .where(eq(staffTable.id, id));
+      }, runtimeEnv);
+      if (rows && rows.length > 0) row = rows[0];
+    }
+
+    if (!row) {
       return new Response(JSON.stringify({ error: "Not Found" }), {
         status: 404,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    const row = rows[0];
     let canonicalDept = getCanonicalDepartment(row.departmentName);
     if (row.staff.category === "faculty" && !canonicalDept) {
       canonicalDept = "Others";
@@ -100,29 +138,60 @@ export const PUT: APIRoute = async (ctx) => {
       );
     }
 
-    await withDbRetry(async (db) => {
-      // Resolve department ID from database
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
       let resolvedDepartmentId: string | null = null;
       if (validation.canonicalDept) {
-        resolvedDepartmentId = await resolveDepartmentId(db, validation.canonicalDept);
+        resolvedDepartmentId = await resolveDepartmentId(client, validation.canonicalDept);
       }
 
       const values = {
         name: String(body.name || ""),
-        position: String(body.position || ""),
+        position: String(body.position || body.designation || ""),
         qualification: body.qualification ? String(body.qualification) : null,
         experience: body.experience ? String(body.experience) : null,
         email: body.email ? String(body.email) : null,
         phone: body.phone ? String(body.phone) : null,
-        image: body.image ? String(body.image) : null,
-        departmentId: resolvedDepartmentId,
+        image: body.image || body.photoUrl ? String(body.image || body.photoUrl) : null,
+        department_id: resolvedDepartmentId,
         category,
-        achievements: Array.isArray(body.achievements) ? body.achievements : null,
-        updatedAt: new Date(),
-      } as const;
+        achievements: Array.isArray(body.achievements)
+          ? body.achievements
+          : Array.isArray(body.roles)
+            ? body.roles
+            : null,
+        updated_at: new Date().toISOString(),
+      };
 
-      await db.update(staffTable).set(values).where(eq(staffTable.id, id));
-    }, runtimeEnv, false);
+      const { error: updErr } = await client.from("staff").update(values).eq("id", id);
+      if (updErr) throw updErr;
+    } else {
+      await withDbRetry(async (db) => {
+        // Resolve department ID from database
+        let resolvedDepartmentId: string | null = null;
+        if (validation.canonicalDept) {
+          resolvedDepartmentId = await resolveDepartmentId(db, validation.canonicalDept);
+        }
+
+        const values = {
+          name: String(body.name || ""),
+          position: String(body.position || body.designation || ""),
+          qualification: body.qualification ? String(body.qualification) : null,
+          experience: body.experience ? String(body.experience) : null,
+          email: body.email ? String(body.email) : null,
+          phone: body.phone ? String(body.phone) : null,
+          image: body.image || body.photoUrl ? String(body.image || body.photoUrl) : null,
+          departmentId: resolvedDepartmentId,
+          category,
+          achievements: Array.isArray(body.achievements) ? body.achievements : null,
+          updatedAt: new Date(),
+        } as const;
+
+        await db.update(staffTable).set(values).where(eq(staffTable.id, id));
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -156,9 +225,17 @@ export const DELETE: APIRoute = async (ctx) => {
   const id = ctx.params.id!;
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    await withDbRetry(async (db) => {
-      await db.delete(staffTable).where(eq(staffTable.id, id));
-    }, runtimeEnv, false);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: delErr } = await client.from("staff").delete().eq("id", id);
+      if (delErr) throw delErr;
+    } else {
+      await withDbRetry(async (db) => {
+        await db.delete(staffTable).where(eq(staffTable.id, id));
+      }, runtimeEnv, false);
+    }
 
     return new Response(null, { status: 204 });
   } catch (error: any) {

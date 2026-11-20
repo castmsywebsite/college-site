@@ -2,20 +2,63 @@ import { createClient } from "@supabase/supabase-js";
 import { dbAsyncLocalStorage } from "@/db";
 
 export const getEnv = (key: string): string => {
-  const runtimeEnv = dbAsyncLocalStorage.getStore()?.runtimeEnv;
+  const storeEnv = dbAsyncLocalStorage.getStore()?.runtimeEnv;
+  const globalEnv = (globalThis as any)?.__env__;
   return (
-    runtimeEnv?.[key] ||
-    (typeof globalThis !== "undefined" && (globalThis as any)?.__env__?.[key]) ||
+    storeEnv?.[key] ||
+    globalEnv?.[key] ||
     (typeof globalThis !== "undefined" && (globalThis as any)?.[key]) ||
     (typeof process !== "undefined" && process.env?.[key]) ||
-    (typeof import.meta !== "undefined" && import.meta.env?.[key]) ||
+    (typeof import.meta !== "undefined" && (import.meta as any).env?.[key]) ||
     ""
   );
 };
 
-export function getSupabaseAdminClient() {
-  const url = getEnv("SUPABASE_URL");
-  const key = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+export function isCloudflareWorker(runtimeEnv?: Record<string, any>): boolean {
+  if (
+    typeof process !== "undefined" &&
+    process.env?.NODE_ENV === "development" &&
+    process.versions?.node &&
+    !(globalThis as any)?.WebSocketPair
+  ) {
+    return false;
+  }
+  return (
+    (typeof navigator !== "undefined" && (navigator as any)?.userAgent === "Cloudflare-Workers") ||
+    typeof (globalThis as any)?.WebSocketPair !== "undefined" ||
+    typeof (globalThis as any)?.caches?.default !== "undefined" ||
+    Boolean(runtimeEnv?.__CF_PAGES__) ||
+    Boolean((globalThis as any)?.__CF_PAGES__) ||
+    Boolean(runtimeEnv?.CF_PAGES) ||
+    Boolean((globalThis as any)?.__env__?.CF_PAGES)
+  );
+}
+
+export function shouldUseSupabaseRest(runtimeEnv?: Record<string, any>): boolean {
+  const env =
+    runtimeEnv ||
+    (globalThis as any)?.__env__ ||
+    dbAsyncLocalStorage.getStore()?.runtimeEnv ||
+    (typeof process !== "undefined" ? process.env : undefined);
+
+  if (env?.USE_SUPABASE_REST === "true") return true;
+  if (env?.USE_SUPABASE_REST === "false") return false;
+
+  const hasHyperdrive = Boolean(
+    env?.HYPERDRIVE?.connectionString ||
+    (globalThis as any)?.HYPERDRIVE?.connectionString
+  );
+  return isCloudflareWorker(env) && !hasHyperdrive;
+}
+
+export function getSupabaseAdminClient(passedEnv?: Record<string, any>) {
+  const env = passedEnv || dbAsyncLocalStorage.getStore()?.runtimeEnv || (globalThis as any)?.__env__;
+  const url = env?.SUPABASE_URL || getEnv("SUPABASE_URL");
+  const key =
+    env?.SUPABASE_SERVICE_ROLE_KEY ||
+    getEnv("SUPABASE_SERVICE_ROLE_KEY") ||
+    env?.SUPABASE_ANON_KEY ||
+    getEnv("SUPABASE_ANON_KEY");
   if (!url || !key) return null as any;
   return createClient(url, key, {
     auth: {
@@ -25,9 +68,14 @@ export function getSupabaseAdminClient() {
   });
 }
 
-export function getSupabaseAnonClient() {
-  const url = getEnv("SUPABASE_URL");
-  const key = getEnv("SUPABASE_ANON_KEY");
+export function getSupabaseAnonClient(passedEnv?: Record<string, any>) {
+  const env = passedEnv || dbAsyncLocalStorage.getStore()?.runtimeEnv || (globalThis as any)?.__env__;
+  const url = env?.SUPABASE_URL || getEnv("SUPABASE_URL");
+  const key =
+    env?.SUPABASE_ANON_KEY ||
+    getEnv("SUPABASE_ANON_KEY") ||
+    env?.SUPABASE_SERVICE_ROLE_KEY ||
+    getEnv("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) return null as any;
   return createClient(url, key);
 }
@@ -39,7 +87,7 @@ export const supabaseAdmin = new Proxy({} as any, {
     if (dynamicClient) return dynamicClient[prop];
     if (!cachedStaticAdmin) {
       const url = getEnv("SUPABASE_URL");
-      const key = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+      const key = getEnv("SUPABASE_SERVICE_ROLE_KEY") || getEnv("SUPABASE_ANON_KEY");
       if (url && key) {
         cachedStaticAdmin = createClient(url, key, {
           auth: { autoRefreshToken: false, persistSession: false },
@@ -57,7 +105,7 @@ export const supabase = new Proxy({} as any, {
     if (dynamicClient) return dynamicClient[prop];
     if (!cachedStaticAnon) {
       const url = getEnv("SUPABASE_URL");
-      const key = getEnv("SUPABASE_ANON_KEY");
+      const key = getEnv("SUPABASE_ANON_KEY") || getEnv("SUPABASE_SERVICE_ROLE_KEY");
       if (url && key) {
         cachedStaticAnon = createClient(url, key);
       }

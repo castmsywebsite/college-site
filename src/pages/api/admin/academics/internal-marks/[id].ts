@@ -44,21 +44,41 @@ export const PUT: APIRoute = async (ctx) => {
         }
 
         const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-        await withDbRetry(async (db) => {
-            await db
-                .update(internalMarksTable)
-                .set({
+        const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+        if (shouldUseSupabaseRest(runtimeEnv)) {
+            const client = supabaseAdmin || supabase;
+            const { error: updErr } = await client
+                .from("internal_marks")
+                .update({
                     title,
-                    description,
-                    link,
+                    description: description || null,
+                    link: link || null,
                     level,
                     program,
                     semester,
-                    date: new Date(dateStr),
-                    updatedAt: new Date(),
+                    date: new Date(dateStr).toISOString(),
+                    updated_at: new Date().toISOString(),
                 })
-                .where(eq(internalMarksTable.id, id));
-        }, runtimeEnv, false);
+                .eq("id", id);
+            if (updErr) throw updErr;
+        } else {
+            await withDbRetry(async (db) => {
+                await db
+                    .update(internalMarksTable)
+                    .set({
+                        title,
+                        description,
+                        link,
+                        level,
+                        program,
+                        semester,
+                        date: new Date(dateStr),
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(internalMarksTable.id, id));
+            }, runtimeEnv, false);
+        }
 
         return new Response(JSON.stringify({ message: "Internal marks updated" }), {
             status: 200,
@@ -90,9 +110,17 @@ export const DELETE: APIRoute = async (ctx) => {
         }
 
         const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-        await withDbRetry(async (db) => {
-            await db.delete(internalMarksTable).where(eq(internalMarksTable.id, id));
-        }, runtimeEnv, false);
+        const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+        if (shouldUseSupabaseRest(runtimeEnv)) {
+            const client = supabaseAdmin || supabase;
+            const { error: delErr } = await client.from("internal_marks").delete().eq("id", id);
+            if (delErr) throw delErr;
+        } else {
+            await withDbRetry(async (db) => {
+                await db.delete(internalMarksTable).where(eq(internalMarksTable.id, id));
+            }, runtimeEnv, false);
+        }
 
         return new Response(JSON.stringify({ message: "Internal marks deleted" }), {
             status: 200,

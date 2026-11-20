@@ -16,21 +16,47 @@ export const GET: APIRoute = async (ctx) => {
 
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    const rows = await withDbRetry(async (db) => {
-      return await db
-        .select()
-        .from(programsTable)
-        .where(eq(programsTable.id, id));
-    }, runtimeEnv);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    let program: any = null;
 
-    if (rows.length === 0) {
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client.from("programs").select("*").eq("id", id).limit(1);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const row = data[0];
+        program = {
+          id: row.id,
+          name: row.name,
+          level: row.level,
+          duration: row.duration,
+          seats: row.seats,
+          affiliation: row.affiliation,
+          description: row.description,
+          eligibility: row.eligibility,
+          curriculum: row.curriculum,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      }
+    } else {
+      const rows = await withDbRetry(async (db) => {
+        return await db
+          .select()
+          .from(programsTable)
+          .where(eq(programsTable.id, id));
+      }, runtimeEnv);
+      if (rows.length > 0) program = rows[0];
+    }
+
+    if (!program) {
       return new Response(
         JSON.stringify({ error: "Program not found" }),
         { status: 404, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    return new Response(JSON.stringify(rows[0]), {
+    return new Response(JSON.stringify(program), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error: any) {
@@ -81,9 +107,29 @@ export const PUT: APIRoute = async (ctx) => {
       updatedAt: new Date(),
     } as const;
 
-    await withDbRetry(async (db) => {
-      await db.update(programsTable).set(values).where(eq(programsTable.id, id));
-    }, runtimeEnv, false);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: updErr } = await client
+        .from("programs")
+        .update({
+          name: values.name,
+          level: values.level,
+          duration: values.duration,
+          seats: values.seats,
+          affiliation: values.affiliation,
+          description: values.description,
+          eligibility: values.eligibility,
+          curriculum: values.curriculum,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (updErr) throw updErr;
+    } else {
+      await withDbRetry(async (db) => {
+        await db.update(programsTable).set(values).where(eq(programsTable.id, id));
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
@@ -123,9 +169,17 @@ export const DELETE: APIRoute = async (ctx) => {
 
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    await withDbRetry(async (db) => {
-      await db.delete(programsTable).where(eq(programsTable.id, id));
-    }, runtimeEnv, false);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: delErr } = await client.from("programs").delete().eq("id", id);
+      if (delErr) throw delErr;
+    } else {
+      await withDbRetry(async (db) => {
+        await db.delete(programsTable).where(eq(programsTable.id, id));
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },

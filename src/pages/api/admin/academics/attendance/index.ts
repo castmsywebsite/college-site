@@ -8,17 +8,10 @@ import { withDbRetry } from "@/db";
 export const GET: APIRoute = async (ctx) => {
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
     let attendance: any[] = [];
-    try {
-      attendance = await withDbRetry(async (db) => {
-        return await db
-          .select()
-          .from(attendanceTable)
-          .orderBy(desc(attendanceTable.date));
-      }, (ctx.locals as any)?.db || runtimeEnv);
-    } catch (dbError: any) {
-      console.warn("Attendance Drizzle query failed, falling back to Supabase REST:", dbError?.message);
-      const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
       const client = supabaseAdmin || supabase;
       const { data, error } = await client
         .from("attendance")
@@ -28,18 +21,46 @@ export const GET: APIRoute = async (ctx) => {
       attendance = (data || []).map((row: any) => ({
         id: row.id,
         title: row.title,
-        date: row.date,
-        programId: row.program_id,
+        description: row.description,
+        link: row.link,
+        level: row.level,
+        program: row.program,
+        batch: row.batch,
         semester: row.semester,
-        academicYear: row.academic_year,
-        fileUrl: row.file_url,
-        fileName: row.file_name,
-        fileSize: row.file_size,
-        mimeType: row.mime_type,
-        uploadedBy: row.uploaded_by,
+        date: row.date,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
+    } else {
+      try {
+        attendance = await withDbRetry(async (db) => {
+          return await db
+            .select()
+            .from(attendanceTable)
+            .orderBy(desc(attendanceTable.date));
+        }, (ctx.locals as any)?.db || runtimeEnv);
+      } catch (dbError: any) {
+        console.warn("Attendance Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client
+          .from("attendance")
+          .select("*")
+          .order("date", { ascending: false });
+        if (error) throw error;
+        attendance = (data || []).map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          description: row.description,
+          link: row.link,
+          level: row.level,
+          program: row.program,
+          batch: row.batch,
+          semester: row.semester,
+          date: row.date,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      }
     }
 
     return new Response(JSON.stringify(attendance), {
@@ -90,21 +111,38 @@ export const POST: APIRoute = async (ctx) => {
     const id = uuidv4();
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
 
-    await withDbRetry(async (db) => {
-      await db
-        .insert(attendanceTable)
-        .values({
-          id,
-          title,
-          description,
-          link,
-          level,
-          program,
-          batch,
-          semester,
-          date: new Date(dateStr),
-        });
-    }, runtimeEnv, false);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: insErr } = await client.from("attendance").insert({
+        id,
+        title,
+        description: description || null,
+        link: link || null,
+        level,
+        program,
+        batch,
+        semester,
+        date: new Date(dateStr).toISOString(),
+      });
+      if (insErr) throw insErr;
+    } else {
+      await withDbRetry(async (db) => {
+        await db
+          .insert(attendanceTable)
+          .values({
+            id,
+            title,
+            description,
+            link,
+            level,
+            program,
+            batch,
+            semester,
+            date: new Date(dateStr),
+          });
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ message: "Attendance created", id }), {
       status: 201,

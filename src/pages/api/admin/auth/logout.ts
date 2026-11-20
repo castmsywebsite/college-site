@@ -13,17 +13,15 @@ export const POST: APIRoute = async (ctx) => {
 
   const { db } = ctx.locals;
   const session = ctx.locals.session;
+  const auth = Auth.getInstance(db);
 
-  if (session && db) {
-    const auth = Auth.getInstance(db);
-    await auth.invalidateSession(session.id);
-    const clearCookie = auth.clearSessionCookie();
-    ctx.cookies.set(clearCookie.name, clearCookie.value, clearCookie.attributes);
-  } else if (db) {
-    const auth = Auth.getInstance(db);
-    const clearCookie = auth.clearSessionCookie();
-    ctx.cookies.set(clearCookie.name, clearCookie.value, clearCookie.attributes);
+  if (session) {
+    try {
+      await auth.invalidateSession(session.id);
+    } catch {}
   }
+  const clearCookie = auth.clearSessionCookie();
+  ctx.cookies.set(clearCookie.name, clearCookie.value, clearCookie.attributes);
 
   // Check if caller requests JSON or standard browser form redirect
   const acceptHeader = ctx.request.headers.get("accept") || "";

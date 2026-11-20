@@ -1,6 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { Auth } from "./lib/auth";
 import { getDb, createRequestDb, dbAsyncLocalStorage, type RequestDatabaseContext } from "./db";
+import { shouldUseSupabaseRest } from "./lib/supabase";
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const runtimeEnv =
@@ -10,58 +11,66 @@ export const onRequest = defineMiddleware(async (context, next) => {
     (typeof process !== "undefined" ? process.env : undefined);
   const cfCtx = (context.locals as any)?.runtime?.ctx;
 
+  if (runtimeEnv) {
+    (globalThis as any).__env__ = runtimeEnv;
+  }
+
   let reqContext: RequestDatabaseContext | null = null;
-  try {
-    reqContext = createRequestDb(runtimeEnv);
-  } catch (err) {
-    console.warn("Could not create request-scoped DB context:", err);
+  const useRest = shouldUseSupabaseRest(runtimeEnv);
+  if (!useRest) {
+    try {
+      reqContext = createRequestDb(runtimeEnv);
+    } catch (err) {
+      console.warn("Could not create request-scoped DB context:", err);
+    }
+  } else {
+    reqContext = {
+      client: null as any,
+      db: null as any,
+      runtimeEnv,
+      cleanup: async () => {},
+    };
   }
 
   const runWithContext = async (activeContext: RequestDatabaseContext | null) => {
     try {
-      if (activeContext) {
-        context.locals.db = activeContext.db as any;
-        context.locals.auth = Auth.getInstance(context.locals.db as any);
-        const auth = context.locals.auth;
-        auth.updateDb(context.locals.db as any);
+      context.locals.db = (activeContext?.db || (useRest ? null : getDb(runtimeEnv))) as any;
+      context.locals.auth = Auth.getInstance(context.locals.db as any);
+      const auth = context.locals.auth;
+      auth.updateDb(context.locals.db as any);
 
-        const sessionId = context.cookies.get(Auth.sessionCookieName)?.value;
-        if (!sessionId) {
-          context.locals.user = null;
-          context.locals.session = null;
-        } else {
-          try {
-            const { session, user } = await auth.validateSession(sessionId);
-
-            // Set cookies BEFORE calling next()
-            if (session) {
-              const sessionCookie = auth.createSessionCookie(session.id);
-              context.cookies.set(
-                sessionCookie.name,
-                sessionCookie.value,
-                sessionCookie.attributes
-              );
-            } else {
-              const sessionCookie = auth.clearSessionCookie();
-              context.cookies.set(
-                sessionCookie.name,
-                sessionCookie.value,
-                sessionCookie.attributes
-              );
-            }
-
-            context.locals.session = session;
-            context.locals.user = user;
-          } catch (sessionError) {
-            console.error("Middleware session validation error:", sessionError);
-            context.locals.user = null;
-            context.locals.session = null;
-          }
-        }
-      } else {
-        context.locals.db = getDb(runtimeEnv) as any;
+      const sessionId = context.cookies.get(Auth.sessionCookieName)?.value;
+      if (!sessionId) {
         context.locals.user = null;
         context.locals.session = null;
+      } else {
+        try {
+          const { session, user } = await auth.validateSession(sessionId);
+
+          // Set cookies BEFORE calling next()
+          if (session) {
+            const sessionCookie = auth.createSessionCookie(session.id);
+            context.cookies.set(
+              sessionCookie.name,
+              sessionCookie.value,
+              sessionCookie.attributes
+            );
+          } else {
+            const sessionCookie = auth.clearSessionCookie();
+            context.cookies.set(
+              sessionCookie.name,
+              sessionCookie.value,
+              sessionCookie.attributes
+            );
+          }
+
+          context.locals.session = session;
+          context.locals.user = user;
+        } catch (sessionError) {
+          console.error("Middleware session validation error:", sessionError);
+          context.locals.user = null;
+          context.locals.session = null;
+        }
       }
 
       const pathname = context.url.pathname;

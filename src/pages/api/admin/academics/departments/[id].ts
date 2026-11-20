@@ -16,21 +16,45 @@ export const GET: APIRoute = async (ctx) => {
 
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    const rows = await withDbRetry(async (db) => {
-      return await db
-        .select()
-        .from(departmentsTable)
-        .where(eq(departmentsTable.id, id));
-    }, runtimeEnv);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    let department: any = null;
 
-    if (rows.length === 0) {
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client.from("departments").select("*").eq("id", id).limit(1);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const row = data[0];
+        department = {
+          id: row.id,
+          name: row.name,
+          hod: row.hod,
+          faculty: row.faculty,
+          labs: row.labs,
+          description: row.description,
+          specializations: row.specializations,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      }
+    } else {
+      const rows = await withDbRetry(async (db) => {
+        return await db
+          .select()
+          .from(departmentsTable)
+          .where(eq(departmentsTable.id, id));
+      }, runtimeEnv);
+      if (rows.length > 0) department = rows[0];
+    }
+
+    if (!department) {
       return new Response(
         JSON.stringify({ error: "Department not found" }),
         { status: 404, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    return new Response(JSON.stringify(rows[0]), {
+    return new Response(JSON.stringify(department), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error: any) {
@@ -95,12 +119,30 @@ export const PUT: APIRoute = async (ctx) => {
       updatedAt: new Date(),
     } as const;
 
-    await withDbRetry(async (db) => {
-      await db
-        .update(departmentsTable)
-        .set(values)
-        .where(eq(departmentsTable.id, id));
-    }, runtimeEnv, false);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: updErr } = await client
+        .from("departments")
+        .update({
+          name: values.name,
+          hod: values.hod,
+          faculty: values.faculty,
+          labs: values.labs,
+          description: values.description,
+          specializations: values.specializations,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (updErr) throw updErr;
+    } else {
+      await withDbRetry(async (db) => {
+        await db
+          .update(departmentsTable)
+          .set(values)
+          .where(eq(departmentsTable.id, id));
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
@@ -140,18 +182,26 @@ export const DELETE: APIRoute = async (ctx) => {
 
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-    await withDbRetry(async (db) => {
-      const existing = await db
-        .select()
-        .from(departmentsTable)
-        .where(eq(departmentsTable.id, id));
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
 
-      if (existing.length === 0) {
-        throw new Error("Department not found");
-      }
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: delErr } = await client.from("departments").delete().eq("id", id);
+      if (delErr) throw delErr;
+    } else {
+      await withDbRetry(async (db) => {
+        const existing = await db
+          .select()
+          .from(departmentsTable)
+          .where(eq(departmentsTable.id, id));
 
-      await db.delete(departmentsTable).where(eq(departmentsTable.id, id));
-    }, runtimeEnv, false);
+        if (existing.length === 0) {
+          throw new Error("Department not found");
+        }
+
+        await db.delete(departmentsTable).where(eq(departmentsTable.id, id));
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },

@@ -8,17 +8,10 @@ import { withDbRetry } from "@/db";
 export const GET: APIRoute = async (ctx) => {
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
     let marks: any[] = [];
-    try {
-      marks = await withDbRetry(async (db) => {
-        return await db
-          .select()
-          .from(internalMarksTable)
-          .orderBy(desc(internalMarksTable.date));
-      }, (ctx.locals as any)?.db || runtimeEnv);
-    } catch (dbError: any) {
-      console.warn("Internal marks Drizzle query failed, falling back to Supabase REST:", dbError?.message);
-      const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
       const client = supabaseAdmin || supabase;
       const { data, error } = await client
         .from("internal_marks")
@@ -28,18 +21,46 @@ export const GET: APIRoute = async (ctx) => {
       marks = (data || []).map((row: any) => ({
         id: row.id,
         title: row.title,
-        date: row.date,
-        programId: row.program_id,
+        description: row.description,
+        link: row.link,
+        level: row.level,
+        program: row.program,
+        batch: row.batch,
         semester: row.semester,
-        academicYear: row.academic_year,
-        fileUrl: row.file_url,
-        fileName: row.file_name,
-        fileSize: row.file_size,
-        mimeType: row.mime_type,
-        uploadedBy: row.uploaded_by,
+        date: row.date,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
+    } else {
+      try {
+        marks = await withDbRetry(async (db) => {
+          return await db
+            .select()
+            .from(internalMarksTable)
+            .orderBy(desc(internalMarksTable.date));
+        }, (ctx.locals as any)?.db || runtimeEnv);
+      } catch (dbError: any) {
+        console.warn("Internal marks Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client
+          .from("internal_marks")
+          .select("*")
+          .order("date", { ascending: false });
+        if (error) throw error;
+        marks = (data || []).map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          description: row.description,
+          link: row.link,
+          level: row.level,
+          program: row.program,
+          batch: row.batch,
+          semester: row.semester,
+          date: row.date,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      }
     }
 
     return new Response(JSON.stringify(marks), {
@@ -90,21 +111,38 @@ export const POST: APIRoute = async (ctx) => {
     const id = uuidv4();
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
 
-    await withDbRetry(async (db) => {
-      await db
-        .insert(internalMarksTable)
-        .values({
-          id,
-          title,
-          description,
-          link,
-          level,
-          program,
-          batch,
-          semester,
-          date: new Date(dateStr),
-        });
-    }, runtimeEnv, false);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: insErr } = await client.from("internal_marks").insert({
+        id,
+        title,
+        description: description || null,
+        link: link || null,
+        level,
+        program,
+        batch,
+        semester,
+        date: new Date(dateStr).toISOString(),
+      });
+      if (insErr) throw insErr;
+    } else {
+      await withDbRetry(async (db) => {
+        await db
+          .insert(internalMarksTable)
+          .values({
+            id,
+            title,
+            description,
+            link,
+            level,
+            program,
+            batch,
+            semester,
+            date: new Date(dateStr),
+          });
+      }, runtimeEnv, false);
+    }
 
     return new Response(
       JSON.stringify({ message: "Internal marks created", id }),

@@ -6,25 +6,46 @@ import { validateSameOrigin } from "@/lib/api-auth";
 export const GET: APIRoute = async (ctx) => {
   try {
     const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
     let rows: any[] = [];
-    try {
-      rows = await withDbRetry(async (db) => {
-        return await db.select().from(departmentsTable);
-      }, (ctx.locals as any)?.db || runtimeEnv);
-    } catch (dbError: any) {
-      console.warn("Departments Drizzle query failed, falling back to Supabase REST:", dbError?.message);
-      const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
       const client = supabaseAdmin || supabase;
-      const { data, error } = await client.from("departments").select("*");
+      const { data, error } = await client.from("departments").select("*").order("name", { ascending: true });
       if (error) throw error;
       rows = (data || []).map((row: any) => ({
         id: row.id,
         name: row.name,
-        code: row.code,
+        hod: row.hod,
+        faculty: row.faculty,
+        labs: row.labs,
         description: row.description,
+        specializations: row.specializations,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
+    } else {
+      try {
+        rows = await withDbRetry(async (db) => {
+          return await db.select().from(departmentsTable);
+        }, (ctx.locals as any)?.db || runtimeEnv);
+      } catch (dbError: any) {
+        console.warn("Departments Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client.from("departments").select("*").order("name", { ascending: true });
+        if (error) throw error;
+        rows = (data || []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          hod: row.hod,
+          faculty: row.faculty,
+          labs: row.labs,
+          description: row.description,
+          specializations: row.specializations,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      }
     }
 
     return new Response(JSON.stringify(rows), {
@@ -86,9 +107,16 @@ export const POST: APIRoute = async (ctx) => {
           : null,
     } as const;
 
-    await withDbRetry(async (db) => {
-      await db.insert(departmentsTable).values(values);
-    }, runtimeEnv, false);
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { error: insErr } = await client.from("departments").insert(values);
+      if (insErr) throw insErr;
+    } else {
+      await withDbRetry(async (db) => {
+        await db.insert(departmentsTable).values(values);
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify({ id, success: true }), {
       status: 201,

@@ -162,13 +162,41 @@ export const authActions = {
       const auth = Auth.getInstance(db);
       try {
         const runtimeEnv = (context.locals as any)?.runtime?.env;
-        const user = await withDbRetry(async (database) => {
-          const [u] = await database
-            .select()
-            .from(userTable)
-            .where(eq(userTable.username, input.username));
-          return u;
-        }, runtimeEnv);
+        const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+        let user: any = null;
+
+        if (shouldUseSupabaseRest(runtimeEnv)) {
+          const client = supabaseAdmin || supabase;
+          const { data } = await client
+            .from("user")
+            .select("*")
+            .eq("username", input.username)
+            .limit(1);
+          if (data && data.length > 0) {
+            user = data[0];
+          }
+        } else {
+          try {
+            user = await withDbRetry(async (database) => {
+              const [u] = await database
+                .select()
+                .from(userTable)
+                .where(eq(userTable.username, input.username));
+              return u;
+            }, runtimeEnv);
+          } catch (dbErr) {
+            console.warn("Login DB query failed, falling back to Supabase REST:", dbErr);
+            const client = supabaseAdmin || supabase;
+            const { data } = await client
+              .from("user")
+              .select("*")
+              .eq("username", input.username)
+              .limit(1);
+            if (data && data.length > 0) {
+              user = data[0];
+            }
+          }
+        }
 
         if (!user) {
           // Record failed attempt to prevent username enumeration timing

@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { isCloudflareWorker, shouldUseSupabaseRest } from "@/lib/supabase";
 
 export const GET: APIRoute = async ({ locals }) => {
   const runtimeEnv =
@@ -15,10 +16,15 @@ export const GET: APIRoute = async ({ locals }) => {
     }
   } catch {}
 
+  const isCf = isCloudflareWorker(runtimeEnv);
+  const useRest = shouldUseSupabaseRest(runtimeEnv);
+
   return new Response(
     JSON.stringify({
       status: "ok",
-      version: "hyperdrive-ready",
+      version: "rest-hybrid-v3",
+      isCloudflare: isCf,
+      useRest: useRest,
       hasHyperdrive: Boolean(hyperdrive),
       hasDbUrl: Boolean(dbUrl),
       hasSupabaseUrl: Boolean(runtimeEnv?.SUPABASE_URL || (globalThis as any)?.__env__?.SUPABASE_URL || process.env?.SUPABASE_URL),

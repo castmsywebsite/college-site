@@ -27,20 +27,52 @@ export const PUT: APIRoute = async (ctx) => {
         const { text, highlight, active } = data;
 
         const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-        const updatedAnnouncement = await withDbRetry(async (db) => {
-            return await db
-                .update(announcementsTable)
-                .set({
-                    text,
-                    highlight,
-                    active,
-                    updatedAt: new Date(),
-                })
-                .where(eq(announcementsTable.id, id))
-                .returning();
-        }, runtimeEnv, false);
+        const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+        let resultAnnouncement: any = null;
 
-        if (updatedAnnouncement.length === 0) {
+        if (shouldUseSupabaseRest(runtimeEnv)) {
+            const client = supabaseAdmin || supabase;
+            const { data, error: updErr } = await client
+                .from("announcements")
+                .update({
+                    text,
+                    highlight: highlight || null,
+                    active,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", id)
+                .select();
+            if (updErr) throw updErr;
+            if (data && data.length > 0) {
+                const row = data[0];
+                resultAnnouncement = {
+                    id: row.id,
+                    text: row.text,
+                    highlight: row.highlight,
+                    active: row.active,
+                    createdAt: row.created_at,
+                    updatedAt: row.updated_at,
+                };
+            }
+        } else {
+            const updatedAnnouncement = await withDbRetry(async (db) => {
+                return await db
+                    .update(announcementsTable)
+                    .set({
+                        text,
+                        highlight,
+                        active,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(announcementsTable.id, id))
+                    .returning();
+            }, runtimeEnv, false);
+            if (updatedAnnouncement && updatedAnnouncement.length > 0) {
+                resultAnnouncement = updatedAnnouncement[0];
+            }
+        }
+
+        if (!resultAnnouncement) {
             return new Response(JSON.stringify({ error: "Announcement not found" }), {
                 status: 404,
                 headers: {
@@ -49,7 +81,7 @@ export const PUT: APIRoute = async (ctx) => {
             });
         }
 
-        return new Response(JSON.stringify(updatedAnnouncement[0]), {
+        return new Response(JSON.stringify(resultAnnouncement), {
             status: 200,
             headers: {
                 "Content-Type": "application/json",
@@ -86,20 +118,28 @@ export const DELETE: APIRoute = async (ctx) => {
 
     try {
         const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-        const deletedAnnouncement = await withDbRetry(async (db) => {
-            return await db
-                .delete(announcementsTable)
-                .where(eq(announcementsTable.id, id))
-                .returning();
-        }, runtimeEnv, false);
+        const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
 
-        if (deletedAnnouncement.length === 0) {
-            return new Response(JSON.stringify({ error: "Announcement not found" }), {
-                status: 404,
-                headers: {
-                    "Content-Type": "application/json",
-                },
-            });
+        if (shouldUseSupabaseRest(runtimeEnv)) {
+            const client = supabaseAdmin || supabase;
+            const { error: delErr } = await client.from("announcements").delete().eq("id", id);
+            if (delErr) throw delErr;
+        } else {
+            const deletedAnnouncement = await withDbRetry(async (db) => {
+                return await db
+                    .delete(announcementsTable)
+                    .where(eq(announcementsTable.id, id))
+                    .returning();
+            }, runtimeEnv, false);
+
+            if (deletedAnnouncement.length === 0) {
+                return new Response(JSON.stringify({ error: "Announcement not found" }), {
+                    status: 404,
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                });
+            }
         }
 
         return new Response(JSON.stringify({ message: "Announcement deleted successfully" }), {

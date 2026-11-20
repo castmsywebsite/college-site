@@ -11,24 +11,9 @@ export const GET: APIRoute = async ({ request, locals }) => {
     const runtimeEnv = (locals as any)?.runtime?.env;
 
     let images: any[] = [];
-    try {
-      images = await withDbRetry(async (database) => {
-        if (category && category !== "all") {
-          return await database
-            .select()
-            .from(galleryImages)
-            .where(eq(galleryImages.category, category))
-            .orderBy(galleryImages.createdAt);
-        } else {
-          return await database
-            .select()
-            .from(galleryImages)
-            .orderBy(galleryImages.createdAt);
-        }
-      }, (locals as any)?.db || runtimeEnv);
-    } catch (dbError: any) {
-      console.warn("Gallery Drizzle query failed, falling back to Supabase REST:", dbError?.message);
-      const { supabaseAdmin, supabase } = await import("../../../lib/supabase");
+    const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("../../../lib/supabase");
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
       const client = supabaseAdmin || supabase;
       let query = client.from("gallery_images").select("*").order("created_at", { ascending: true });
       if (category && category !== "all") {
@@ -48,6 +33,44 @@ export const GET: APIRoute = async ({ request, locals }) => {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
+    } else {
+      try {
+        images = await withDbRetry(async (database) => {
+          if (category && category !== "all") {
+            return await database
+              .select()
+              .from(galleryImages)
+              .where(eq(galleryImages.category, category))
+              .orderBy(galleryImages.createdAt);
+          } else {
+            return await database
+              .select()
+              .from(galleryImages)
+              .orderBy(galleryImages.createdAt);
+          }
+        }, (locals as any)?.db || runtimeEnv);
+      } catch (dbError: any) {
+        console.warn("Gallery Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+        const client = supabaseAdmin || supabase;
+        let query = client.from("gallery_images").select("*").order("created_at", { ascending: true });
+        if (category && category !== "all") {
+          query = query.eq("category", category);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        images = (data || []).map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          description: row.description,
+          category: row.category,
+          imageUrl: row.image_url,
+          fileName: row.file_name,
+          fileSize: row.file_size,
+          mimeType: row.mime_type,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      }
     }
 
     return new Response(JSON.stringify(images), {
@@ -106,25 +129,57 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
 
-    const { uploadImage } = await import("../../../lib/supabase");
+    const { uploadImage, shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("../../../lib/supabase");
     const imageUrl = await uploadImage(file, file.name);
 
     const runtimeEnv = (locals as any)?.runtime?.env;
-    const newImage = await withDbRetry(async (database) => {
-      const [inserted] = await database
-        .insert(galleryImages)
-        .values({
+    let newImage: any = null;
+
+    if (shouldUseSupabaseRest(runtimeEnv)) {
+      const client = supabaseAdmin || supabase;
+      const { data, error: insErr } = await client
+        .from("gallery_images")
+        .insert({
           title,
           description: description || null,
           category,
-          imageUrl,
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type,
+          image_url: imageUrl,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
         })
-        .returning();
-      return inserted;
-    }, runtimeEnv, false);
+        .select();
+      if (insErr) throw insErr;
+      const row = data?.[0];
+      newImage = {
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        category: row.category,
+        imageUrl: row.image_url,
+        fileName: row.file_name,
+        fileSize: row.file_size,
+        mimeType: row.mime_type,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    } else {
+      newImage = await withDbRetry(async (database) => {
+        const [inserted] = await database
+          .insert(galleryImages)
+          .values({
+            title,
+            description: description || null,
+            category,
+            imageUrl,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          })
+          .returning();
+        return inserted;
+      }, runtimeEnv, false);
+    }
 
     return new Response(JSON.stringify(newImage), {
       status: 201,

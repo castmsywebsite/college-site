@@ -8,17 +8,10 @@ import { withDbRetry } from "@/db";
 export const GET: APIRoute = async (ctx) => {
     try {
         const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+        const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
         let announcements: any[] = [];
-        try {
-            announcements = await withDbRetry(async (db) => {
-                return await db
-                    .select()
-                    .from(announcementsTable)
-                    .orderBy(desc(announcementsTable.createdAt));
-            }, (ctx.locals as any)?.db || runtimeEnv);
-        } catch (dbError: any) {
-            console.warn("Announcements Drizzle query failed, falling back to Supabase REST:", dbError?.message);
-            const { supabaseAdmin, supabase } = await import("@/lib/supabase");
+
+        if (shouldUseSupabaseRest(runtimeEnv)) {
             const client = supabaseAdmin || supabase;
             const { data, error } = await client
                 .from("announcements")
@@ -33,6 +26,31 @@ export const GET: APIRoute = async (ctx) => {
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
             }));
+        } else {
+            try {
+                announcements = await withDbRetry(async (db) => {
+                    return await db
+                        .select()
+                        .from(announcementsTable)
+                        .orderBy(desc(announcementsTable.createdAt));
+                }, (ctx.locals as any)?.db || runtimeEnv);
+            } catch (dbError: any) {
+                console.warn("Announcements Drizzle query failed, falling back to Supabase REST:", dbError?.message);
+                const client = supabaseAdmin || supabase;
+                const { data, error } = await client
+                    .from("announcements")
+                    .select("*")
+                    .order("created_at", { ascending: false });
+                if (error) throw error;
+                announcements = (data || []).map((row: any) => ({
+                    id: row.id,
+                    text: row.text,
+                    highlight: row.highlight,
+                    active: row.active,
+                    createdAt: row.created_at,
+                    updatedAt: row.updated_at,
+                }));
+            }
         }
 
         return new Response(JSON.stringify(announcements), {
@@ -73,19 +91,47 @@ export const POST: APIRoute = async (ctx) => {
         }
 
         const runtimeEnv = (ctx.locals as any)?.runtime?.env;
-        const newAnnouncement = await withDbRetry(async (db) => {
-            return await db
-                .insert(announcementsTable)
-                .values({
-                    id: uuidv4(),
+        const { shouldUseSupabaseRest, supabaseAdmin, supabase } = await import("@/lib/supabase");
+        let resultAnnouncement: any = null;
+
+        if (shouldUseSupabaseRest(runtimeEnv)) {
+            const client = supabaseAdmin || supabase;
+            const newId = uuidv4();
+            const { data, error: insErr } = await client
+                .from("announcements")
+                .insert({
+                    id: newId,
                     text,
-                    highlight,
+                    highlight: highlight || null,
                     active: active !== undefined ? active : true,
                 })
-                .returning();
-        }, runtimeEnv, false);
+                .select();
+            if (insErr) throw insErr;
+            const row = data?.[0];
+            resultAnnouncement = {
+                id: row.id,
+                text: row.text,
+                highlight: row.highlight,
+                active: row.active,
+                createdAt: row.created_at,
+                updatedAt: row.updated_at,
+            };
+        } else {
+            const newAnnouncement = await withDbRetry(async (db) => {
+                return await db
+                    .insert(announcementsTable)
+                    .values({
+                        id: uuidv4(),
+                        text,
+                        highlight,
+                        active: active !== undefined ? active : true,
+                    })
+                    .returning();
+            }, runtimeEnv, false);
+            resultAnnouncement = newAnnouncement[0];
+        }
 
-        return new Response(JSON.stringify(newAnnouncement[0]), {
+        return new Response(JSON.stringify(resultAnnouncement), {
             status: 201,
             headers: {
                 "Content-Type": "application/json",
