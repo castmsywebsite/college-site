@@ -117,7 +117,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return response;
     } finally {
       // In Cloudflare Workers, cleanly terminate this request's Postgres client in waitUntil
-      if (activeContext && cfCtx && typeof cfCtx.waitUntil === "function") {
+      if (activeContext?.client && cfCtx && typeof cfCtx.waitUntil === "function") {
         cfCtx.waitUntil(activeContext.client.end({ timeout: 1 }).catch(() => {}));
       }
     }
