@@ -1,16 +1,19 @@
 import type { APIRoute } from "astro";
-import { db } from "@/db";
 import { announcementsTable } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { requireAdminAuth } from "@/lib/api-auth";
+import { withDbRetry } from "@/db";
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async (ctx) => {
     try {
-        const announcements = await db
-            .select()
-            .from(announcementsTable)
-            .orderBy(desc(announcementsTable.createdAt));
+        const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+        const announcements = await withDbRetry(async (db) => {
+            return await db
+                .select()
+                .from(announcementsTable)
+                .orderBy(desc(announcementsTable.createdAt));
+        }, runtimeEnv);
 
         return new Response(JSON.stringify(announcements), {
             status: 200,
@@ -18,8 +21,9 @@ export const GET: APIRoute = async () => {
                 "Content-Type": "application/json",
             },
         });
-    } catch (error) {
-        return new Response(JSON.stringify({ error: "Failed to fetch announcements" }), {
+    } catch (error: any) {
+        console.error("Failed to fetch announcements:", error);
+        return new Response(JSON.stringify({ error: error?.message || "Failed to fetch announcements" }), {
             status: 500,
             headers: {
                 "Content-Type": "application/json",
@@ -48,15 +52,18 @@ export const POST: APIRoute = async (ctx) => {
             });
         }
 
-        const newAnnouncement = await db
-            .insert(announcementsTable)
-            .values({
-                id: uuidv4(),
-                text,
-                highlight,
-                active: active !== undefined ? active : true,
-            })
-            .returning();
+        const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+        const newAnnouncement = await withDbRetry(async (db) => {
+            return await db
+                .insert(announcementsTable)
+                .values({
+                    id: uuidv4(),
+                    text,
+                    highlight,
+                    active: active !== undefined ? active : true,
+                })
+                .returning();
+        }, runtimeEnv);
 
         return new Response(JSON.stringify(newAnnouncement[0]), {
             status: 201,
@@ -64,8 +71,9 @@ export const POST: APIRoute = async (ctx) => {
                 "Content-Type": "application/json",
             },
         });
-    } catch (error) {
-        return new Response(JSON.stringify({ error: "Failed to create announcement" }), {
+    } catch (error: any) {
+        console.error("Failed to create announcement:", error);
+        return new Response(JSON.stringify({ error: error?.message || "Failed to create announcement" }), {
             status: 500,
             headers: {
                 "Content-Type": "application/json",

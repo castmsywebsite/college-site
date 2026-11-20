@@ -1,22 +1,45 @@
 import type { APIRoute } from "astro";
-import { db as getDb } from "@/db";
 import { departmentsTable } from "@/db/schema/academics";
+import { withDbRetry } from "@/db";
+import { validateSameOrigin } from "@/lib/api-auth";
 
 export const GET: APIRoute = async (ctx) => {
-  const db = ctx.locals.db;
+  try {
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    const rows = await withDbRetry(async (db) => {
+      return await db.select().from(departmentsTable);
+    }, runtimeEnv);
 
-  const rows = await db.select().from(departmentsTable);
-  return new Response(JSON.stringify(rows), {
-    headers: { "Content-Type": "application/json" },
-  });
+    return new Response(JSON.stringify(rows), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    console.error("Error fetching departments:", error);
+    return new Response(
+      JSON.stringify({ error: error?.message || "Failed to fetch departments" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 };
 
 export const POST: APIRoute = async (ctx) => {
-  const db = ctx.locals.db;
+  if (!validateSameOrigin(ctx.request)) {
+    return new Response(
+      JSON.stringify({ error: "Forbidden", message: "Cross-Origin request blocked" }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const user = ctx.locals.user;
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized", message: "Admin authentication required" }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
   try {
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
     const body = await ctx.request.json();
     const id = crypto.randomUUID();
 
@@ -27,7 +50,10 @@ export const POST: APIRoute = async (ctx) => {
       body.faculty === undefined ||
       body.labs === undefined
     ) {
-      return new Response("Missing required fields", { status: 400 });
+      return new Response(
+        JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
     const values = {
@@ -43,13 +69,19 @@ export const POST: APIRoute = async (ctx) => {
           : null,
     } as const;
 
-    await db.insert(departmentsTable).values(values);
-    return new Response(JSON.stringify({ id }), {
+    await withDbRetry(async (db) => {
+      await db.insert(departmentsTable).values(values);
+    }, runtimeEnv);
+
+    return new Response(JSON.stringify({ id, success: true }), {
       status: 201,
       headers: { "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating department:", error);
-    return new Response("Internal server error", { status: 500 });
+    return new Response(
+      JSON.stringify({ error: error?.message || "Failed to create department" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 };

@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
-import { db } from "@/db";
 import { announcementsTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAdminAuth } from "@/lib/api-auth";
+import { withDbRetry } from "@/db";
 
 export const PUT: APIRoute = async (ctx) => {
     const auth = requireAdminAuth(ctx);
@@ -26,16 +26,19 @@ export const PUT: APIRoute = async (ctx) => {
         const data = await request.json();
         const { text, highlight, active } = data;
 
-        const updatedAnnouncement = await db
-            .update(announcementsTable)
-            .set({
-                text,
-                highlight,
-                active,
-                updatedAt: new Date(),
-            })
-            .where(eq(announcementsTable.id, id))
-            .returning();
+        const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+        const updatedAnnouncement = await withDbRetry(async (db) => {
+            return await db
+                .update(announcementsTable)
+                .set({
+                    text,
+                    highlight,
+                    active,
+                    updatedAt: new Date(),
+                })
+                .where(eq(announcementsTable.id, id))
+                .returning();
+        }, runtimeEnv);
 
         if (updatedAnnouncement.length === 0) {
             return new Response(JSON.stringify({ error: "Announcement not found" }), {
@@ -52,8 +55,9 @@ export const PUT: APIRoute = async (ctx) => {
                 "Content-Type": "application/json",
             },
         });
-    } catch (error) {
-        return new Response(JSON.stringify({ error: "Failed to update announcement" }), {
+    } catch (error: any) {
+        console.error("Failed to update announcement:", error);
+        return new Response(JSON.stringify({ error: error?.message || "Failed to update announcement" }), {
             status: 500,
             headers: {
                 "Content-Type": "application/json",
@@ -81,10 +85,13 @@ export const DELETE: APIRoute = async (ctx) => {
     }
 
     try {
-        const deletedAnnouncement = await db
-            .delete(announcementsTable)
-            .where(eq(announcementsTable.id, id))
-            .returning();
+        const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+        const deletedAnnouncement = await withDbRetry(async (db) => {
+            return await db
+                .delete(announcementsTable)
+                .where(eq(announcementsTable.id, id))
+                .returning();
+        }, runtimeEnv);
 
         if (deletedAnnouncement.length === 0) {
             return new Response(JSON.stringify({ error: "Announcement not found" }), {
@@ -101,8 +108,9 @@ export const DELETE: APIRoute = async (ctx) => {
                 "Content-Type": "application/json",
             },
         });
-    } catch (error) {
-        return new Response(JSON.stringify({ error: "Failed to delete announcement" }), {
+    } catch (error: any) {
+        console.error("Failed to delete announcement:", error);
+        return new Response(JSON.stringify({ error: error?.message || "Failed to delete announcement" }), {
             status: 500,
             headers: {
                 "Content-Type": "application/json",

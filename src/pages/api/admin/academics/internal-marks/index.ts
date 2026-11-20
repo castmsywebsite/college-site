@@ -1,22 +1,29 @@
 import type { APIRoute } from "astro";
-import { db } from "@/db";
 import { internalMarksTable } from "@/db/schema/academics";
 import { desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { requireAdminAuth } from "@/lib/api-auth";
+import { withDbRetry } from "@/db";
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async (ctx) => {
   try {
-    //FIXED: db.select instead of db().select
-    const marks = await db
-      .select()
-      .from(internalMarksTable)
-      .orderBy(desc(internalMarksTable.date));
-    return new Response(JSON.stringify(marks), { status: 200 });
-  } catch (error) {
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    const marks = await withDbRetry(async (db) => {
+      return await db
+        .select()
+        .from(internalMarksTable)
+        .orderBy(desc(internalMarksTable.date));
+    }, runtimeEnv);
+
+    return new Response(JSON.stringify(marks), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    console.error("Error fetching internal marks:", error);
     return new Response(
-      JSON.stringify({ message: "Error fetching internal marks" }),
-      { status: 500 }
+      JSON.stringify({ error: error?.message || "Error fetching internal marks" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 };
@@ -41,8 +48,8 @@ export const POST: APIRoute = async (ctx) => {
 
     if (!title || !level || !program || !batch || !semester || !dateStr) {
       return new Response(
-        JSON.stringify({ message: "Missing required fields" }),
-        { status: 400 }
+        JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -54,31 +61,33 @@ export const POST: APIRoute = async (ctx) => {
     }
 
     const id = uuidv4();
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
 
-    //FIXED: db.insert instead of db().insert
-    await db
-      .insert(internalMarksTable)
-      .values({
-        id,
-        title,
-        description,
-        link,
-        level,
-        program,
-        batch,
-        semester,
-        date: new Date(dateStr),
-      });
+    await withDbRetry(async (db) => {
+      await db
+        .insert(internalMarksTable)
+        .values({
+          id,
+          title,
+          description,
+          link,
+          level,
+          program,
+          batch,
+          semester,
+          date: new Date(dateStr),
+        });
+    }, runtimeEnv);
 
     return new Response(
       JSON.stringify({ message: "Internal marks created", id }),
-      { status: 201 }
+      { status: 201, headers: { "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating internal marks:", error);
     return new Response(
-      JSON.stringify({ message: "Error creating internal marks" }),
-      { status: 500 }
+      JSON.stringify({ error: error?.message || "Error creating internal marks" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 };

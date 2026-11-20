@@ -3,6 +3,7 @@ import { userTable } from "@/db/schema/user";
 import type { AstroCookieSetOptions } from "astro";
 import { eq } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { isConnectionError, resetDbClient } from "@/db";
 
 export interface Session {
   id: string;
@@ -36,8 +37,14 @@ export class Auth {
   ): Auth {
     if (!Auth.instance) {
       Auth.instance = new Auth(db);
+    } else {
+      Auth.instance.db = db;
     }
     return Auth.instance;
+  }
+
+  public updateDb(db: PostgresJsDatabase<Record<string, never>>) {
+    this.db = db;
   }
 
   private generateSessionId(): string {
@@ -51,11 +58,22 @@ export class Auth {
       userId,
       expiresAt: new Date(now + this.sessionDurationSeconds * 1000),
     };
-    await this.db.insert(sessionTable).values(session);
-    return session;
+
+    try {
+      await this.db.insert(sessionTable).values(session);
+      return session;
+    } catch (err: any) {
+      if (isConnectionError(err)) {
+        console.warn("createSession: DB connection dropped, retrying with fresh client...");
+        this.db = resetDbClient() as unknown as PostgresJsDatabase<Record<string, never>>;
+        await this.db.insert(sessionTable).values(session);
+        return session;
+      }
+      throw err;
+    }
   }
 
-  public async validateSession(
+  private async executeValidate(
     sessionId: string
   ): Promise<{ session: Session | null; user: User | null }> {
     const now = Date.now();
@@ -74,7 +92,11 @@ export class Auth {
     };
 
     if (now >= session.expiresAt.getTime()) {
-      await this.db.delete(sessionTable).where(eq(sessionTable.id, session.id));
+      try {
+        await this.db.delete(sessionTable).where(eq(sessionTable.id, session.id));
+      } catch (delErr) {
+        console.warn("Failed to delete expired session:", delErr);
+      }
       return { session: null, user: null };
     }
 
@@ -83,10 +105,14 @@ export class Auth {
 
     if (now >= halfLifeThreshold) {
       session.expiresAt = new Date(now + this.sessionDurationSeconds * 1000);
-      await this.db
-        .update(sessionTable)
-        .set({ expiresAt: session.expiresAt })
-        .where(eq(sessionTable.id, sessionId));
+      try {
+        await this.db
+          .update(sessionTable)
+          .set({ expiresAt: session.expiresAt })
+          .where(eq(sessionTable.id, sessionId));
+      } catch (updErr) {
+        console.warn("Failed to refresh session lifetime:", updErr);
+      }
     }
 
     const [userData] = await this.db
@@ -104,8 +130,39 @@ export class Auth {
     return { session, user };
   }
 
+  public async validateSession(
+    sessionId: string
+  ): Promise<{ session: Session | null; user: User | null }> {
+    try {
+      return await this.executeValidate(sessionId);
+    } catch (err: any) {
+      if (isConnectionError(err)) {
+        console.warn("validateSession: DB connection dropped, retrying with fresh client...");
+        try {
+          this.db = resetDbClient() as unknown as PostgresJsDatabase<Record<string, never>>;
+          return await this.executeValidate(sessionId);
+        } catch (retryErr) {
+          console.error("validateSession retry failed:", retryErr);
+          return { session: null, user: null };
+        }
+      }
+      console.error("validateSession error:", err);
+      return { session: null, user: null };
+    }
+  }
+
   public async invalidateSession(sessionId: string): Promise<void> {
-    await this.db.delete(sessionTable).where(eq(sessionTable.id, sessionId));
+    try {
+      await this.db.delete(sessionTable).where(eq(sessionTable.id, sessionId));
+    } catch (err: any) {
+      if (isConnectionError(err)) {
+        console.warn("invalidateSession: DB connection dropped, retrying with fresh client...");
+        this.db = resetDbClient() as unknown as PostgresJsDatabase<Record<string, never>>;
+        await this.db.delete(sessionTable).where(eq(sessionTable.id, sessionId));
+        return;
+      }
+      console.error("invalidateSession error:", err);
+    }
   }
 
   public createSessionCookie(
@@ -124,6 +181,7 @@ export class Auth {
       },
     };
   }
+
   public clearSessionCookie(): SessionCookie {
     return {
       name: Auth.sessionCookieName,

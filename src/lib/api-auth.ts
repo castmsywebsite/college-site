@@ -9,6 +9,7 @@ export interface AuthenticatedAdminContext {
 /**
  * Validates that state-changing requests (POST, PUT, PATCH, DELETE)
  * originate from the same origin to protect against Cross-Site Request Forgery (CSRF).
+ * Fully handles reverse proxy headers (x-forwarded-host, host) for custom domains behind Cloudflare.
  */
 export function validateSameOrigin(request: Request): boolean {
   const method = request.method.toUpperCase();
@@ -18,23 +19,32 @@ export function validateSameOrigin(request: Request): boolean {
   }
 
   const originHeader = request.headers.get("origin");
+  const refererHeader = request.headers.get("referer");
   const requestUrl = new URL(request.url);
 
-  if (originHeader) {
-    try {
-      const originUrl = new URL(originHeader);
-      return originUrl.origin === requestUrl.origin;
-    } catch {
-      return false;
-    }
-  }
+  // Normalize expected target host (from proxy headers or request URL)
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const hostHeader = request.headers.get("host");
+  const targetHost = (forwardedHost || hostHeader || requestUrl.host).toLowerCase();
 
-  // Fallback to Referer header if Origin is not supplied (e.g. certain browser form navigations)
-  const refererHeader = request.headers.get("referer");
-  if (refererHeader) {
+  const sourceHeader = originHeader || refererHeader;
+  if (sourceHeader) {
     try {
-      const refererUrl = new URL(refererHeader);
-      return refererUrl.origin === requestUrl.origin;
+      const sourceUrl = new URL(sourceHeader);
+      const sourceHost = sourceUrl.host.toLowerCase();
+
+      // Check against target host (handles custom domains e.g. casthamarassery.ihrd.ac.in)
+      if (sourceHost === targetHost) {
+        return true;
+      }
+
+      // Also check directly against request URL host (handles direct worker or local dev)
+      if (sourceHost === requestUrl.host.toLowerCase()) {
+        return true;
+      }
+
+      // Source host does not match either target host or request URL host
+      return false;
     } catch {
       return false;
     }
@@ -104,4 +114,3 @@ export function requireAdminAuth(
 
   return { authorized: true, user, session };
 }
-

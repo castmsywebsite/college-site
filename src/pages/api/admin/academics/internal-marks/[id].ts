@@ -1,9 +1,8 @@
-
 import type { APIRoute } from "astro";
-import { db } from "@/db";
 import { internalMarksTable } from "@/db/schema/academics";
 import { eq } from "drizzle-orm";
 import { requireAdminAuth } from "@/lib/api-auth";
+import { withDbRetry } from "@/db";
 
 export const PUT: APIRoute = async (ctx) => {
     const auth = requireAdminAuth(ctx);
@@ -15,8 +14,9 @@ export const PUT: APIRoute = async (ctx) => {
     try {
         const { id } = params;
         if (!id) {
-            return new Response(JSON.stringify({ message: "ID is required" }), {
+            return new Response(JSON.stringify({ error: "ID is required" }), {
                 status: 400,
+                headers: { "Content-Type": "application/json" },
             });
         }
 
@@ -30,8 +30,9 @@ export const PUT: APIRoute = async (ctx) => {
         const file = formData.get("file") as File;
 
         if (!title || !level || !program || !semester || !dateStr) {
-            return new Response(JSON.stringify({ message: "Missing required fields" }), {
+            return new Response(JSON.stringify({ error: "Missing required fields" }), {
                 status: 400,
+                headers: { "Content-Type": "application/json" },
             });
         }
 
@@ -42,27 +43,32 @@ export const PUT: APIRoute = async (ctx) => {
             link = await uploadDocument(file, file.name);
         }
 
-        await db
-            .update(internalMarksTable)
-            .set({
-                title,
-                description,
-                link,
-                level,
-                program,
-                semester,
-                date: new Date(dateStr),
-                updatedAt: new Date(),
-            })
-            .where(eq(internalMarksTable.id, id));
+        const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+        await withDbRetry(async (db) => {
+            await db
+                .update(internalMarksTable)
+                .set({
+                    title,
+                    description,
+                    link,
+                    level,
+                    program,
+                    semester,
+                    date: new Date(dateStr),
+                    updatedAt: new Date(),
+                })
+                .where(eq(internalMarksTable.id, id));
+        }, runtimeEnv);
 
         return new Response(JSON.stringify({ message: "Internal marks updated" }), {
             status: 200,
+            headers: { "Content-Type": "application/json" },
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error updating internal marks:", error);
-        return new Response(JSON.stringify({ message: "Error updating internal marks" }), {
+        return new Response(JSON.stringify({ error: error?.message || "Error updating internal marks" }), {
             status: 500,
+            headers: { "Content-Type": "application/json" },
         });
     }
 };
@@ -77,20 +83,26 @@ export const DELETE: APIRoute = async (ctx) => {
     try {
         const { id } = params;
         if (!id) {
-            return new Response(JSON.stringify({ message: "ID is required" }), {
+            return new Response(JSON.stringify({ error: "ID is required" }), {
                 status: 400,
+                headers: { "Content-Type": "application/json" },
             });
         }
 
-        await db.delete(internalMarksTable).where(eq(internalMarksTable.id, id));
+        const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+        await withDbRetry(async (db) => {
+            await db.delete(internalMarksTable).where(eq(internalMarksTable.id, id));
+        }, runtimeEnv);
 
         return new Response(JSON.stringify({ message: "Internal marks deleted" }), {
             status: 200,
+            headers: { "Content-Type": "application/json" },
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error deleting internal marks:", error);
-        return new Response(JSON.stringify({ message: "Error deleting internal marks" }), {
+        return new Response(JSON.stringify({ error: error?.message || "Error deleting internal marks" }), {
             status: 500,
+            headers: { "Content-Type": "application/json" },
         });
     }
 };

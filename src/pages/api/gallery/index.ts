@@ -1,27 +1,29 @@
 import type { APIRoute } from "astro";
 import { galleryImages } from "../../../db/schema/gallery";
 import { eq } from "drizzle-orm";
+import { withDbRetry } from "@/db";
+import { validateSameOrigin } from "@/lib/api-auth";
 
 export const GET: APIRoute = async ({ request, locals }) => {
   try {
     const url = new URL(request.url);
     const category = url.searchParams.get("category");
+    const runtimeEnv = (locals as any)?.runtime?.env;
 
-    const database = locals.db;
-
-    let images;
-    if (category && category !== "all") {
-      images = await database
-        .select()
-        .from(galleryImages)
-        .where(eq(galleryImages.category, category))
-        .orderBy(galleryImages.createdAt);
-    } else {
-      images = await database
-        .select()
-        .from(galleryImages)
-        .orderBy(galleryImages.createdAt);
-    }
+    const images = await withDbRetry(async (database) => {
+      if (category && category !== "all") {
+        return await database
+          .select()
+          .from(galleryImages)
+          .where(eq(galleryImages.category, category))
+          .orderBy(galleryImages.createdAt);
+      } else {
+        return await database
+          .select()
+          .from(galleryImages)
+          .orderBy(galleryImages.createdAt);
+      }
+    }, runtimeEnv);
 
     return new Response(JSON.stringify(images), {
       status: 200,
@@ -29,10 +31,10 @@ export const GET: APIRoute = async ({ request, locals }) => {
         "Content-Type": "application/json",
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching gallery images:", error);
     return new Response(
-      JSON.stringify({ error: "Failed to fetch gallery images" }),
+      JSON.stringify({ error: error?.message || "Failed to fetch gallery images" }),
       {
         status: 500,
         headers: {
@@ -44,8 +46,14 @@ export const GET: APIRoute = async ({ request, locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  try {
+  if (!validateSameOrigin(request)) {
+    return new Response(
+      JSON.stringify({ error: "Forbidden", message: "Cross-Origin request blocked" }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
+  try {
     if (!locals.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -76,20 +84,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const { uploadImage } = await import("../../../lib/supabase");
     const imageUrl = await uploadImage(file, file.name);
 
-
-    const database = locals.db;
-    const [newImage] = await database
-      .insert(galleryImages)
-      .values({
-        title,
-        description: description || null,
-        category,
-        imageUrl,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
-      })
-      .returning();
+    const runtimeEnv = (locals as any)?.runtime?.env;
+    const newImage = await withDbRetry(async (database) => {
+      const [inserted] = await database
+        .insert(galleryImages)
+        .values({
+          title,
+          description: description || null,
+          category,
+          imageUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+        })
+        .returning();
+      return inserted;
+    }, runtimeEnv);
 
     return new Response(JSON.stringify(newImage), {
       status: 201,
@@ -97,10 +107,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
         "Content-Type": "application/json",
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating gallery image:", error);
     return new Response(
-      JSON.stringify({ error: "Failed to create gallery image" }),
+      JSON.stringify({ error: error?.message || "Failed to create gallery image" }),
       {
         status: 500,
         headers: {

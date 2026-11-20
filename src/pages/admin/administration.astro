@@ -490,6 +490,10 @@ if (!Astro.locals.session) {
 
       try {
         const res = await fetch("/api/admin/administration");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || `Server responded with ${res.status}`);
+        }
         const data = await res.json();
         const list = Array.isArray(data) ? data : [];
 
@@ -533,8 +537,17 @@ if (!Astro.locals.session) {
         });
       } catch (err) {
         console.error("Failed to load staff:", err);
-        grid.innerHTML =
-          "<div class='col-span-full text-center text-red-500 py-8'>Failed to load staff data.</div>";
+        grid.innerHTML = `
+          <div class='col-span-full text-center py-12'>
+            <div class='text-destructive font-medium mb-2'>Failed to load staff data.</div>
+            <p class='text-muted-foreground text-xs mb-4'>${err.message || "A temporary connection issue occurred."}</p>
+            <button id='retry-staff-load-btn' class='rounded-md border px-4 py-2 text-xs font-medium hover:bg-muted transition'>Try Again</button>
+          </div>
+        `;
+        const retryBtn = document.getElementById("retry-staff-load-btn");
+        if (retryBtn) {
+          retryBtn.addEventListener("click", () => loadStaff());
+        }
       } finally {
         if (loadingIndicator) loadingIndicator.style.display = "none";
       }

@@ -1,21 +1,31 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.SUPABASE_ANON_KEY;
-const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
+const getEnv = (key: string): string => {
+  return (
+    (typeof process !== "undefined" && process.env?.[key]) ||
+    (typeof import.meta !== "undefined" && import.meta.env?.[key]) ||
+    ""
+  );
+};
 
-if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
-  throw new Error("Missing Supabase environment variables");
-}
+const supabaseUrl = getEnv("SUPABASE_URL");
+const supabaseAnonKey = getEnv("SUPABASE_ANON_KEY");
+const supabaseServiceKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : (null as any);
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
+export const supabaseAdmin =
+  supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+    : (null as any);
 
 export const GALLERY_BUCKET = "gallery-images";
 export const DOCUMENTS_BUCKET = "academic-documents";

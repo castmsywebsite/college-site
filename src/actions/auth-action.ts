@@ -1,5 +1,6 @@
 import { userTable } from "@/db/schema/user";
 import { Auth } from "@/lib/auth";
+import { withDbRetry } from "@/db";
 import { ActionError, defineAction } from "astro:actions";
 import { z } from "astro:schema";
 import bcrypt from "bcryptjs";
@@ -92,10 +93,14 @@ export const authActions = {
       const { db } = context.locals;
 
       try {
-        const [existingUser] = await db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.username, input.name));
+        const runtimeEnv = (context.locals as any)?.runtime?.env;
+        const existingUser = await withDbRetry(async (database) => {
+          const [u] = await database
+            .select()
+            .from(userTable)
+            .where(eq(userTable.username, input.name));
+          return u;
+        }, runtimeEnv);
 
         if (existingUser) {
           throw new ActionError({
@@ -107,11 +112,13 @@ export const authActions = {
         const userId = crypto.randomUUID();
         const hashedPassword = await bcrypt.hash(input.password, 10);
 
-        await db.insert(userTable).values({
-          id: userId,
-          username: input.name,
-          password_hash: hashedPassword,
-        });
+        await withDbRetry(async (database) => {
+          await database.insert(userTable).values({
+            id: userId,
+            username: input.name,
+            password_hash: hashedPassword,
+          });
+        }, runtimeEnv);
 
         // Legitimate administrative user creation: do NOT overwrite current admin's session
         return {
@@ -154,10 +161,14 @@ export const authActions = {
       const { db } = context.locals;
       const auth = Auth.getInstance(db);
       try {
-        const [user] = await db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.username, input.username));
+        const runtimeEnv = (context.locals as any)?.runtime?.env;
+        const user = await withDbRetry(async (database) => {
+          const [u] = await database
+            .select()
+            .from(userTable)
+            .where(eq(userTable.username, input.username));
+          return u;
+        }, runtimeEnv);
 
         if (!user) {
           // Record failed attempt to prevent username enumeration timing

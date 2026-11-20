@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
-import { db } from "@/db";
 import { attendanceTable } from "@/db/schema/academics";
 import { eq } from "drizzle-orm";
 import { requireAdminAuth } from "@/lib/api-auth";
+import { withDbRetry } from "@/db";
 
 export const PUT: APIRoute = async (ctx) => {
   const auth = requireAdminAuth(ctx);
@@ -14,8 +14,9 @@ export const PUT: APIRoute = async (ctx) => {
   try {
     const { id } = params;
     if (!id) {
-      return new Response(JSON.stringify({ message: "ID is required" }), {
+      return new Response(JSON.stringify({ error: "ID is required" }), {
         status: 400,
+        headers: { "Content-Type": "application/json" },
       });
     }
 
@@ -30,8 +31,8 @@ export const PUT: APIRoute = async (ctx) => {
 
     if (!title || !level || !program || !semester || !dateStr) {
       return new Response(
-        JSON.stringify({ message: "Missing required fields" }),
-        { status: 400 }
+        JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -42,29 +43,33 @@ export const PUT: APIRoute = async (ctx) => {
       link = await uploadDocument(file, file.name);
     }
 
-    //FIXED: db.update instead of db().update
-    await db
-      .update(attendanceTable)
-      .set({
-        title,
-        description,
-        link,
-        level,
-        program,
-        semester,
-        date: new Date(dateStr),
-        updatedAt: new Date(),
-      })
-      .where(eq(attendanceTable.id, id));
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+
+    await withDbRetry(async (db) => {
+      await db
+        .update(attendanceTable)
+        .set({
+          title,
+          description,
+          link,
+          level,
+          program,
+          semester,
+          date: new Date(dateStr),
+          updatedAt: new Date(),
+        })
+        .where(eq(attendanceTable.id, id));
+    }, runtimeEnv);
 
     return new Response(JSON.stringify({ message: "Attendance updated" }), {
       status: 200,
+      headers: { "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating attendance:", error);
     return new Response(
-      JSON.stringify({ message: "Error updating attendance" }),
-      { status: 500 }
+      JSON.stringify({ error: error?.message || "Error updating attendance" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 };
@@ -79,22 +84,26 @@ export const DELETE: APIRoute = async (ctx) => {
   try {
     const { id } = params;
     if (!id) {
-      return new Response(JSON.stringify({ message: "ID is required" }), {
+      return new Response(JSON.stringify({ error: "ID is required" }), {
         status: 400,
+        headers: { "Content-Type": "application/json" },
       });
     }
 
-    //FIXED: db.delete instead of db().delete
-    await db.delete(attendanceTable).where(eq(attendanceTable.id, id));
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    await withDbRetry(async (db) => {
+      await db.delete(attendanceTable).where(eq(attendanceTable.id, id));
+    }, runtimeEnv);
 
     return new Response(JSON.stringify({ message: "Attendance deleted" }), {
       status: 200,
+      headers: { "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error deleting attendance:", error);
     return new Response(
-      JSON.stringify({ message: "Error deleting attendance" }),
-      { status: 500 }
+      JSON.stringify({ error: error?.message || "Error deleting attendance" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 };

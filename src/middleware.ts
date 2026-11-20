@@ -1,38 +1,46 @@
 import { defineMiddleware } from "astro:middleware";
 import { Auth } from "./lib/auth";
-import { db } from "./db";
+import { getDb } from "./db";
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  context.locals.db = db;
-  context.locals.auth = Auth.getInstance(context.locals.db);
+  const runtimeEnv = (context.locals as any)?.runtime?.env;
+  context.locals.db = getDb(runtimeEnv) as any;
+  context.locals.auth = Auth.getInstance(context.locals.db as any);
   const auth = context.locals.auth;
+  auth.updateDb(context.locals.db as any);
 
   const sessionId = context.cookies.get(Auth.sessionCookieName)?.value;
   if (!sessionId) {
     context.locals.user = null;
     context.locals.session = null;
   } else {
-    const { session, user } = await auth.validateSession(sessionId);
+    try {
+      const { session, user } = await auth.validateSession(sessionId);
 
-    // Set cookies BEFORE calling next()
-    if (session) {
-      const sessionCookie = auth.createSessionCookie(session.id);
-      context.cookies.set(
-        sessionCookie.name,
-        sessionCookie.value,
-        sessionCookie.attributes
-      );
-    } else {
-      const sessionCookie = auth.clearSessionCookie();
-      context.cookies.set(
-        sessionCookie.name,
-        sessionCookie.value,
-        sessionCookie.attributes
-      );
+      // Set cookies BEFORE calling next()
+      if (session) {
+        const sessionCookie = auth.createSessionCookie(session.id);
+        context.cookies.set(
+          sessionCookie.name,
+          sessionCookie.value,
+          sessionCookie.attributes
+        );
+      } else {
+        const sessionCookie = auth.clearSessionCookie();
+        context.cookies.set(
+          sessionCookie.name,
+          sessionCookie.value,
+          sessionCookie.attributes
+        );
+      }
+
+      context.locals.session = session;
+      context.locals.user = user;
+    } catch (sessionError) {
+      console.error("Middleware session validation error:", sessionError);
+      context.locals.user = null;
+      context.locals.session = null;
     }
-
-    context.locals.session = session;
-    context.locals.user = user;
   }
 
   const pathname = context.url.pathname;
@@ -40,7 +48,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     (pathname === "/admin" || pathname.startsWith("/admin/")) &&
     pathname !== "/admin/admin-login-user-access";
 
-  // PHASE 2.2: Centralized redirect for unauthenticated protected Admin requests
+  // Centralized redirect for unauthenticated protected Admin requests
   if (isProtectedAdminRoute && !context.locals.session) {
     const redirectResponse = context.redirect("/admin/admin-login-user-access", 302);
     redirectResponse.headers.set(
@@ -66,7 +74,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     "camera=(), microphone=(), geolocation=(), payment=()"
   );
 
-  // PHASE 2.2: Comprehensive Cache-Control for all Admin HTML & API responses
+  // Comprehensive Cache-Control for all Admin HTML & API responses
   if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/admin")) {
     response.headers.set(
       "Cache-Control",

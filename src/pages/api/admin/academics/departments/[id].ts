@@ -1,42 +1,73 @@
 import type { APIRoute } from "astro";
-import { db as getDb } from "@/db";
 import { departmentsTable } from "@/db/schema/academics";
 import { eq } from "drizzle-orm";
-import { Auth } from "@/lib/auth";
+import { withDbRetry } from "@/db";
+import { validateSameOrigin } from "@/lib/api-auth";
 
 export const GET: APIRoute = async (ctx) => {
-  const db = ctx.locals.db;
   const id = ctx.params.id;
 
   if (!id) {
-    return new Response("Department ID is required", { status: 400 });
-  }
-
-  const rows = await db
-    .select()
-    .from(departmentsTable)
-    .where(eq(departmentsTable.id, id));
-
-  if (rows.length === 0) {
-    return new Response("Department not found", { status: 404 });
-  }
-
-  return new Response(JSON.stringify(rows[0]), {
-    headers: { "Content-Type": "application/json" },
-  });
-};
-
-export const PUT: APIRoute = async (ctx) => {
-  const db = ctx.locals.db;
-  const user = ctx.locals.user;
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const id = ctx.params.id;
-  if (!id) {
-    return new Response("Department ID is required", { status: 400 });
+    return new Response(
+      JSON.stringify({ error: "Department ID is required" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   try {
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    const rows = await withDbRetry(async (db) => {
+      return await db
+        .select()
+        .from(departmentsTable)
+        .where(eq(departmentsTable.id, id));
+    }, runtimeEnv);
+
+    if (rows.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Department not found" }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(JSON.stringify(rows[0]), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    console.error("Error fetching department:", error);
+    return new Response(
+      JSON.stringify({ error: error?.message || "Failed to fetch department" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
+};
+
+export const PUT: APIRoute = async (ctx) => {
+  if (!validateSameOrigin(ctx.request)) {
+    return new Response(
+      JSON.stringify({ error: "Forbidden", message: "Cross-Origin request blocked" }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const user = ctx.locals.user;
+  if (!user) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized", message: "Admin authentication required" }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const id = ctx.params.id;
+  if (!id) {
+    return new Response(
+      JSON.stringify({ error: "Department ID is required" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  try {
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
     const body = await ctx.request.json();
 
     if (
@@ -45,7 +76,10 @@ export const PUT: APIRoute = async (ctx) => {
       body.faculty === undefined ||
       body.labs === undefined
     ) {
-      return new Response("Missing required fields", { status: 400 });
+      return new Response(
+        JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
     const values = {
@@ -61,45 +95,73 @@ export const PUT: APIRoute = async (ctx) => {
       updatedAt: new Date(),
     } as const;
 
-    await db
-      .update(departmentsTable)
-      .set(values)
-      .where(eq(departmentsTable.id, id));
+    await withDbRetry(async (db) => {
+      await db
+        .update(departmentsTable)
+        .set(values)
+        .where(eq(departmentsTable.id, id));
+    }, runtimeEnv);
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating department:", error);
-    return new Response("Internal server error", { status: 500 });
+    return new Response(
+      JSON.stringify({ error: error?.message || "Failed to update department" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 };
 
 export const DELETE: APIRoute = async (ctx) => {
-  const db = ctx.locals.db;
+  if (!validateSameOrigin(ctx.request)) {
+    return new Response(
+      JSON.stringify({ error: "Forbidden", message: "Cross-Origin request blocked" }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const user = ctx.locals.user;
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized", message: "Admin authentication required" }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
   const id = ctx.params.id;
   if (!id) {
-    return new Response("Department ID is required", { status: 400 });
+    return new Response(
+      JSON.stringify({ error: "Department ID is required" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   try {
-    const existing = await db
-      .select()
-      .from(departmentsTable)
-      .where(eq(departmentsTable.id, id));
+    const runtimeEnv = (ctx.locals as any)?.runtime?.env;
+    await withDbRetry(async (db) => {
+      const existing = await db
+        .select()
+        .from(departmentsTable)
+        .where(eq(departmentsTable.id, id));
 
-    if (existing.length === 0) {
-      return new Response("Department not found", { status: 404 });
-    }
+      if (existing.length === 0) {
+        throw new Error("Department not found");
+      }
 
-    await db.delete(departmentsTable).where(eq(departmentsTable.id, id));
+      await db.delete(departmentsTable).where(eq(departmentsTable.id, id));
+    }, runtimeEnv);
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error deleting department:", error);
-    return new Response("Internal server error", { status: 500 });
+    const status = error.message === "Department not found" ? 404 : 500;
+    return new Response(
+      JSON.stringify({ error: error?.message || "Failed to delete department" }),
+      { status, headers: { "Content-Type": "application/json" } }
+    );
   }
 };
